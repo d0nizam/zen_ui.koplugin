@@ -32,18 +32,50 @@ local function apply_browser_folder_cover()
     local _ = require("gettext")
     local Screen = Device.screen
 
-    local FolderCover = {
-        name = ".cover",
-        exts = { ".jpg", ".jpeg", ".png", ".webp", ".gif" },
-    }
+    local _COVER_EXTS = { ".jpg", ".jpeg", ".png" }
 
+    -- Returns path to cover.jpg/png in dir_path, or nil. Falls back to legacy .cover.* names.
     local function findCover(dir_path)
-        local path = dir_path .. "/" .. FolderCover.name
-        for _, ext in ipairs(FolderCover.exts) do
-            local fname = path .. ext
+        for _, ext in ipairs(_COVER_EXTS) do
+            local fname = dir_path .. "/cover" .. ext
+            if util.fileExists(fname) then return fname end
+        end
+        -- Legacy .cover.* fallback
+        for _, ext in ipairs({ ".jpg", ".jpeg", ".png", ".webp", ".gif" }) do
+            local fname = dir_path .. "/.cover" .. ext
             if util.fileExists(fname) then return fname end
         end
     end
+
+    -- Returns table [1..4] of cover file paths for gallery mode (cover1.jpg, etc.), entries may be nil.
+    local function findGalleryCovers(dir_path)
+        local result = {}
+        for i = 1, 4 do
+            for _, ext in ipairs(_COVER_EXTS) do
+                local fname = dir_path .. "/cover" .. i .. ext
+                if util.fileExists(fname) then
+                    result[i] = fname
+                    break
+                end
+            end
+        end
+        return result
+    end
+
+    -- Returns true if the file basename is a cover image filename (cover.jpg, cover1.png, etc.).
+    local function isCoverFile(path)
+        local name = (path:match("[^/]+$") or path):lower()
+        for _, ext in ipairs(_COVER_EXTS) do
+            if name == "cover" .. ext or name == ".cover" .. ext then return true end
+            for i = 1, 4 do
+                if name == "cover" .. i .. ext then return true end
+            end
+        end
+        return false
+    end
+
+    -- Forward ref set in patchCoverBrowser once BookInfoManager is available.
+    local _get_hide_cover_files = nil
 
     local function getMenuItem(menu, ...) -- path
         local function findItem(sub_items, texts)
@@ -208,13 +240,15 @@ local function apply_browser_folder_cover()
     local function _item_table_key(path)
         local mtime = lfs.attributes(path, "modification") or 0
         local filter = FileChooser.show_filter and FileChooser.show_filter.status
-        return string.format("%s|%d|%s|%s|%s|%s|%s",
+        local hide_covers = _get_hide_cover_files and _get_hide_cover_files() or false
+        return string.format("%s|%d|%s|%s|%s|%s|%s|%s",
             path, mtime,
             G_reader_settings:readSetting("collate", "strcoll"),
             tostring(G_reader_settings:isTrue("collate_mixed")),
             tostring(G_reader_settings:isTrue("reverse_collate")),
             tostring(FileChooser.show_hidden),
-            tostring(filter))
+            tostring(filter),
+            tostring(hide_covers))
     end
 
     local orig_FileChooser_genItemTableFromPath = FileChooser.genItemTableFromPath
@@ -239,6 +273,16 @@ local function apply_browser_folder_cover()
             local _t0_gen = os.clock()
             local result = orig_FileChooser_genItemTableFromPath(self, path)
             _perf.gen_item_time = _perf.gen_item_time + (os.clock() - _t0_gen)
+            -- Filter cover image files from the view when the setting is enabled.
+            if _get_hide_cover_files and _get_hide_cover_files() then
+                local filtered = {}
+                for _, item in ipairs(result) do
+                    if not ((item.is_file or item.file) and isCoverFile(item.path or "")) then
+                        filtered[#filtered + 1] = item
+                    end
+                end
+                result = filtered
+            end
             if use_cache then
                 _item_table_cache = { key = key, table = result }
             else
@@ -582,7 +626,10 @@ local function apply_browser_folder_cover()
             show_item_count = BooleanSetting(_("Show item count on folder covers"), "folder_item_count_show", true),
             name_opaque = BooleanSetting(_("Folder name opaque background"), "folder_name_opaque", true),
             gallery_mode = BooleanSetting(_("Gallery view"), "folder_gallery_mode"),
+            hide_cover_files = BooleanSetting(_("Hide cover image files"), "folder_cover_files_hidden", true),
         }
+        settings.hide_cover_files.needs_list_refresh = true
+        _get_hide_cover_files = function() return settings.hide_cover_files.get() end
 
         -- cover item
         local function _zen_update_impl(self, ...)
@@ -852,7 +899,17 @@ local function apply_browser_folder_cover()
                 return
             end
 
-            local cover_file = findCover(dir_path) --custom
+            -- Gallery mode: look for explicit cover1-4 files before falling back to book covers.
+            if settings.gallery_mode.get() then
+                local gfiles = findGalleryCovers(dir_path)
+                if gfiles[1] or gfiles[2] or gfiles[3] or gfiles[4] then
+                    self._foldercover_processed = true
+                    self:_setFolderCover { gallery_files = gfiles }
+                    return
+                end
+            end
+
+            local cover_file = findCover(dir_path)
             if cover_file then
                 local success, w, h = pcall(function()
                     local tmp_img = ImageWidget:new { file = cover_file, scale_factor = 1 }
@@ -998,6 +1055,61 @@ local function apply_browser_folder_cover()
                         -- Empty slot: transparent widget with correct dimensions so the
                         -- layout engine sizes the row/column correctly.  The outer
                         -- FrameContainer's background shows through.
+                        cells[i] = CenterContainer:new {
+                            dimen = { w = cd.w, h = cd.h },
+                            VerticalSpan:new { width = 1 },
+                        }
+                    end
+                end
+                image_widget = FrameContainer:new {
+                    padding = 0,
+                    bordersize = border,
+                    width = dimen.w, height = dimen.h,
+                    background = placeholderBg(),
+                    CenterContainer:new {
+                        dimen = { w = portrait_w, h = portrait_h },
+                        VerticalGroup:new {
+                            HorizontalGroup:new {
+                                cells[1],
+                                LineWidget:new { background = Blitbuffer.COLOR_WHITE, dimen = { w = sep, h = half_h } },
+                                cells[2],
+                            },
+                            LineWidget:new { background = Blitbuffer.COLOR_WHITE, dimen = { w = portrait_w, h = sep } },
+                            HorizontalGroup:new {
+                                cells[3],
+                                LineWidget:new { background = Blitbuffer.COLOR_WHITE, dimen = { w = sep, h = half_h2 } },
+                                cells[4],
+                            },
+                        },
+                    },
+                    overlap_align = "center",
+                }
+            elseif img.gallery_files then
+                local gfiles = img.gallery_files
+                local sep = 1
+                local half_w  = math.floor((portrait_w - sep) / 2)
+                local half_w2 = portrait_w - sep - half_w
+                local half_h  = math.floor((portrait_h - sep) / 2)
+                local half_h2 = portrait_h - sep - half_h
+                local cell_dims = {
+                    { w = half_w,  h = half_h  },
+                    { w = half_w2, h = half_h  },
+                    { w = half_w,  h = half_h2 },
+                    { w = half_w2, h = half_h2 },
+                }
+                local cells = {}
+                for i = 1, 4 do
+                    local cd = cell_dims[i]
+                    if gfiles[i] then
+                        cells[i] = CenterContainer:new {
+                            dimen = { w = cd.w, h = cd.h },
+                            ImageWidget:new {
+                                file   = gfiles[i],
+                                width  = cd.w,
+                                height = cd.h,
+                            },
+                        }
+                    else
                         cells[i] = CenterContainer:new {
                             dimen = { w = cd.w, h = cd.h },
                             VerticalSpan:new { width = 1 },
@@ -1311,6 +1423,16 @@ local function apply_browser_folder_cover()
                     local dir_path = self.entry and self.entry.path
                     if not dir_path then return end
 
+                    -- Gallery mode: look for explicit cover1-4 files before falling back to book covers.
+                    if settings.gallery_mode.get() then
+                        local gfiles = findGalleryCovers(dir_path)
+                        if gfiles[1] or gfiles[2] or gfiles[3] or gfiles[4] then
+                            self._foldercover_processed = true
+                            self:_setListFolderCover { gallery_files = gfiles }
+                            return
+                        end
+                    end
+
                     local cover_file = findCover(dir_path)
                     if cover_file then
                         local success, w, h = pcall(function()
@@ -1460,6 +1582,67 @@ local function apply_browser_folder_cover()
                                 },
                             }
                         end
+                    elseif img.gallery_files then
+                        local gfiles = img.gallery_files
+                        local gall_h = max_img
+                        local gall_w = math.floor(max_img * 2 / 3)  -- 2:3 portrait
+                        local cover_w = gall_w + 2 * border_size
+                        local cover_h = gall_h + 2 * border_size
+                        spine_x = math.max(0, math.floor((cover_zone_w - cover_w) / 2))
+                        local sep = 1
+                        local half_w  = math.floor((gall_w - sep) / 2)
+                        local half_w2 = gall_w - sep - half_w
+                        local half_h  = math.floor((gall_h - sep) / 2)
+                        local half_h2 = gall_h - sep - half_h
+                        local cell_dims = {
+                            { w = half_w,  h = half_h  },
+                            { w = half_w2, h = half_h  },
+                            { w = half_w,  h = half_h2 },
+                            { w = half_w2, h = half_h2 },
+                        }
+                        local cells = {}
+                        for i = 1, 4 do
+                            local cd = cell_dims[i]
+                            if gfiles[i] then
+                                cells[i] = CenterContainer:new {
+                                    dimen = { w = cd.w, h = cd.h },
+                                    ImageWidget:new {
+                                        file   = gfiles[i],
+                                        width  = cd.w,
+                                        height = cd.h,
+                                    },
+                                }
+                            else
+                                cells[i] = CenterContainer:new {
+                                    dimen = { w = cd.w, h = cd.h },
+                                    VerticalSpan:new { width = 1 },
+                                }
+                            end
+                        end
+                        wleft = CenterContainer:new {
+                            dimen = { w = cover_zone_w, h = dimen_h },
+                            FrameContainer:new {
+                                width = cover_w, height = cover_h,
+                                margin = 0, padding = 0, bordersize = border_size,
+                                background = Blitbuffer.COLOR_LIGHT_GRAY,
+                                CenterContainer:new {
+                                    dimen = { w = gall_w, h = gall_h },
+                                    VerticalGroup:new {
+                                        HorizontalGroup:new {
+                                            cells[1],
+                                            LineWidget:new { background = Blitbuffer.COLOR_WHITE, dimen = { w = sep, h = half_h } },
+                                            cells[2],
+                                        },
+                                        LineWidget:new { background = Blitbuffer.COLOR_WHITE, dimen = { w = gall_w, h = sep } },
+                                        HorizontalGroup:new {
+                                            cells[3],
+                                            LineWidget:new { background = Blitbuffer.COLOR_WHITE, dimen = { w = sep, h = half_h2 } },
+                                            cells[4],
+                                        },
+                                    },
+                                },
+                            },
+                        }
                     elseif img.no_image then
                         local portrait_w = math.floor(max_img * 2 / 3)  -- 2:3, matches gallery and book covers
                         local cover_w = portrait_w + 2 * border_size
@@ -1659,7 +1842,14 @@ local function apply_browser_folder_cover()
                             checked_func = function() return setting.get() end,
                             callback = function()
                                 setting.toggle()
-                                self.ui.file_chooser:updateItems()
+                                local fc = self.ui.file_chooser
+                                if setting.needs_list_refresh and fc then
+                                    cached_list = {}
+                                    _item_table_cache = nil
+                                    fc:changeToPath(fc.path)
+                                else
+                                    fc:updateItems()
+                                end
                             end,
                         })
                     end

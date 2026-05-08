@@ -6,6 +6,7 @@ local PATCH_MODULES = {
     book_status = "modules/reader/patches/book_status",
     reader_clock = "modules/reader/patches/reader_clock",
     screensaver_cover = "modules/reader/patches/screensaver_cover",
+    reader_footer = "modules/reader/patches/reader_footer",
     reader_footer_time_format = "modules/reader/patches/reader_footer_time_format",
     reader_footer_cbz_hide = "modules/reader/patches/reader_footer_cbz_hide",
     margin_hold_guard = "modules/reader/patches/margin_hold_guard",
@@ -72,6 +73,12 @@ function M.init(logger, plugin)
     local screensaver_cover_fn = load_patch("screensaver_cover")
     if screensaver_cover_fn then
         run_feature(logger, plugin, "screensaver_cover", screensaver_cover_fn)
+    end
+
+    -- Always apply: two-filler L/C/R layout support.
+    local reader_footer_fn = load_patch("reader_footer")
+    if reader_footer_fn then
+        run_feature(logger, plugin, "reader_footer", reader_footer_fn)
     end
 
     -- Always apply: format time_to_chapter in Kindle style ("X mins left in chapter")
