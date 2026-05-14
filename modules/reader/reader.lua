@@ -4,7 +4,7 @@ local initialized = false
 local PATCH_MODULES = {
     opening_banner = "modules/reader/patches/opening_banner",
     book_status = "modules/reader/patches/book_status",
-    reader_clock = "modules/reader/patches/reader_clock",
+    reader_top_status_bar = "modules/reader/patches/reader_top_status_bar",
     screensaver_cover = "modules/reader/patches/screensaver_cover",
     reader_footer = "modules/reader/patches/reader_footer",
     reader_footer_time_format = "modules/reader/patches/reader_footer_time_format",
@@ -126,15 +126,15 @@ function M.init(logger, plugin)
         _G.__ZEN_UI_RUNTIME_PATCHES = runtime_patches
     end
 
-    if is_feature_enabled(plugin, "reader_clock") then
-        local fn = load_patch("reader_clock")
+    if is_feature_enabled(plugin, "reader_top_status_bar") then
+        local fn = load_patch("reader_top_status_bar")
         if fn then
-            local ok = run_feature(logger, plugin, "reader_clock", fn)
+            local ok = run_feature(logger, plugin, "reader_top_status_bar", fn)
             if ok then
-                runtime_patches["reader_clock"] = true
+                runtime_patches["reader_top_status_bar"] = true
             end
         elseif logger then
-            logger.warn("zen-ui: reader patch module missing", "reader_clock")
+            logger.warn("zen-ui: reader patch module missing", "reader_top_status_bar")
         end
     end
 
