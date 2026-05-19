@@ -485,6 +485,8 @@ local function apply_opds()
     -- Cover-aware updateItems; supports mosaic grid and list layouts matched to library mode.
     -- The root catalog list (paths empty) always uses a fixed list with placeholder covers.
     function OPDSBrowser:updateItems(select_number, no_recalculate_dimen)
+        local _ratio_str = G_reader_settings and G_reader_settings:readSetting("uniform_cover_ratio") or "2:3"
+        local _cover_ratio = _ratio_str == "3:4" and 3/4 or 2/3
         -- Root screen: always list, 10 per page, grey placeholder covers.
         if #(self.paths or {}) == 0 then
             if self._zen_halt then self._zen_halt(); self._zen_halt = nil end
@@ -509,7 +511,7 @@ local function apply_opds()
             local list_perpage = 8
             self.item_height = math.floor(avail_h / list_perpage)
             local cover_h = math.max(1, self.item_height - PAD_V * 2)
-            local cover_w = math.floor(cover_h * 2 / 3)
+            local cover_w = math.floor(cover_h * _cover_ratio)
             self.perpage    = list_perpage
             self.page_num   = math.max(1, math.ceil(#self.item_table / self.perpage))
             if self.page > self.page_num then self.page = self.page_num end
@@ -614,7 +616,7 @@ local function apply_opds()
             local cell_h = math.floor((avail_h - (1 + num_rows) * item_margin) / num_rows)
             local cover_area_h = cell_h - _strip_h
             local cover_h = math.max(1, cover_area_h - PAD_V * 2)
-            local cover_w = math.floor(cover_h * 2 / 3)
+            local cover_w = math.floor(cover_h * _cover_ratio)
             self.item_height = cell_h
             self.perpage     = num_cols * num_rows
             self.page_num    = math.max(1, math.ceil(#self.item_table / self.perpage))
@@ -681,7 +683,7 @@ local function apply_opds()
             -- derive item_height to fill avail_h exactly (no gap at bottom)
             self.item_height = math.floor(avail_h / list_perpage)
             cover_h = math.max(1, self.item_height - PAD_V * 2)
-            local cover_w = math.floor(cover_h * 2 / 3)
+            local cover_w = math.floor(cover_h * _cover_ratio)
             self.perpage     = list_perpage
             self.page_num    = math.max(1, math.ceil(#self.item_table / self.perpage))
             if self.page > self.page_num then self.page = self.page_num end
@@ -773,7 +775,11 @@ local function apply_opds()
             if #browser.paths > 0 then
                 browser:onReturn()
             elseif browser.close_callback then
-                browser.close_callback()
+                -- Stock close_callback may reference opds_browser (nil in some versions).
+                local ok = pcall(browser.close_callback)
+                if not ok then UIManager:close(browser) end
+            else
+                UIManager:close(browser)
             end
         end
         if browser.title_bar and browser.title_bar.right_button then
@@ -821,14 +827,14 @@ local function apply_opds()
         local default_url = G_reader_settings:readSetting("opds_default_url")
         if default_url then
             self._zen_default_navigated = true
-            -- Pre-load credentials from the matching server entry.
-            for _, entry in ipairs(self.item_table or {}) do
-                if entry.url == default_url then
-                    self.root_catalog_title    = entry.text
-                    self.root_catalog_username = entry.username
-                    self.root_catalog_password = entry.password
-                    self.root_catalog_raw_names = entry.raw_names
-                    self.catalog_title         = entry.text
+            -- Pre-load credentials from the canonical servers list.
+            for _i, server in ipairs(self.servers or {}) do
+                if server.url == default_url then
+                    self.root_catalog_title     = server.title
+                    self.root_catalog_username  = server.username
+                    self.root_catalog_password  = server.password
+                    self.root_catalog_raw_names = server.raw_names
+                    self.catalog_title          = server.title
                     break
                 end
             end
@@ -845,7 +851,12 @@ local function apply_opds()
     local orig_updatePageInfo = Menu.updatePageInfo
     function OPDSBrowser:updatePageInfo(select_number)
         orig_updatePageInfo(self, select_number)
-        if self.page_return_arrow then self.page_return_arrow:hide() end
+        if self.page_return_arrow then
+            self.page_return_arrow:hide()
+            -- Kill callbacks so the invisible hit area can't trigger back navigation.
+            self.page_return_arrow.callback = nil
+            self.page_return_arrow.hold_callback = nil
+        end
     end
 
     -- Tag book items with cover_url for async cover loading.

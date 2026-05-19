@@ -135,29 +135,16 @@ function M.build(ctx)
     local CUSTOM_TAB_ICONS
     local function getCustomTabIcons()
         if CUSTOM_TAB_ICONS then return CUSTOM_TAB_ICONS end
+        local utils = require("common/utils")
+        local ok_root, root = pcall(require, "common/plugin_root")
         local excluded = { zen_ui_light = true, zen_ui_update = true }
-        local icons = {}
-        local ok_lfs, lfs_mod = pcall(require, "libs/libkoreader-lfs")
-        local root = ok_lfs and lfs_mod and require("common/plugin_root")
-        if root then
-            local icons_dir = root .. "/icons"
-            for f in lfs_mod.dir(icons_dir) do
-                if f:match("%.svg$") and not f:match("%.bak%.svg$") then
-                    local name = f:sub(1, -5)
-                    if not excluded[name] then icons[#icons + 1] = name end
-                end
-            end
-            table.sort(icons)
-        end
-        CUSTOM_TAB_ICONS = icons
+        CUSTOM_TAB_ICONS = utils.getIconPickerList(ok_root and root or nil, excluded)
         return CUSTOM_TAB_ICONS
     end
 
     local _icon_picker = require("common/zen_icon_picker")
     local function showTabIconPicker(ct, on_select)
-        local ok_root, root = pcall(require, "common/plugin_root")
-        if not ok_root or not root then return end
-        _icon_picker(getCustomTabIcons(), root .. "/icons", ct.icon, on_select)
+        _icon_picker(getCustomTabIcons(), ct.icon, on_select)
     end
 
     local build_ct_sub_items  -- forward decl

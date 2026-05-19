@@ -258,6 +258,44 @@ function M.getBadgeScale(config)
     return 1.0
 end
 
+--- Build the combined {name, file} icon list for the icon picker.
+--- Sources (in order, names deduplicated across groups, each sorted by name):
+---   1. Zen UI plugin icons  (plugin_root/icons)
+---   2. KOReader user icons  (DataStorage/icons)
+---   3. KOReader built-in icons  (resources/icons/mdlight)
+--- @param plugin_root string   absolute path to the plugin root (no trailing slash)
+--- @param excluded    table|nil  set of icon name strings to skip in the plugin group
+--- @return table  list of {name=string, file=string}
+function M.getIconPickerList(plugin_root, excluded)
+    local ok, lfs = pcall(require, "libs/libkoreader-lfs")
+    if not ok or not lfs then return {} end
+    local seen = {}
+    local all  = {}
+    local function addDir(dir, filter)
+        if not dir then return end
+        dir = dir:match("^(.*[^/])/*$") or dir  -- strip trailing slash
+        if lfs.attributes(dir, "mode") ~= "directory" then return end
+        local entries = {}
+        for f in lfs.dir(dir) do
+            if f:match("%.svg$") and not f:match("%.bak%.svg$") then
+                local name = f:sub(1, -5)
+                if not seen[name] and (not filter or not filter[name]) then
+                    entries[#entries + 1] = { name = name, file = dir .. "/" .. f }
+                end
+            end
+        end
+        table.sort(entries, function(a, b) return a.name < b.name end)
+        for _i, item in ipairs(entries) do
+            seen[item.name] = true
+            all[#all + 1] = item
+        end
+    end
+    addDir(plugin_root and plugin_root .. "/icons", excluded)
+    addDir(M.getUserIconsDir(), nil)
+    addDir(lfs.currentdir() .. "/resources/icons/mdlight", nil)
+    return all
+end
+
 -- Close all UIManager window-stack entries above `anchor_widget`.
 -- Collects first to avoid mutating the stack during iteration.
 function M.closeWidgetsAbove(anchor_widget)
