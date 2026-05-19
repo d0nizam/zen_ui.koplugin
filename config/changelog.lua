@@ -65,6 +65,7 @@ return {
     ["1.3.0"] = {
         "Updated customization options for reader status bars (Reader > Top/Bottom Status bar)",
         "Add support for custom folder covers with image files",
+        "Add support for more custom icons in Quick settings & Navbar",
         "Updated placeholders for folders/books",
         "Add better support for legacy/non-touch devices",
         "Add toggle for whole word search matching (Global > Search)",
