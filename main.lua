@@ -128,6 +128,7 @@ end
 function ZenUI:init()
     i18n.install()  -- reinstall after any context-switch uninstall (onCloseWidget removes it)
     self.config = ConfigManager.load()
+    _G.__ZEN_UI_LIBRARY_FONT_CFG = self.config and self.config.library_font or nil
     _zen_plugin_ref = self
     -- Load cached update state now so has_update() is correct when the menu first opens.
     zen_updater.init_banner()

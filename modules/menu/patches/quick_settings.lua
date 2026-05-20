@@ -20,6 +20,7 @@ local function apply_quick_settings()
     local UIManager = require("ui/uimanager")
     local ZenSlider = require("common/zen_slider")
     local ZenToggle = require("common/zen_toggle")
+    local library_font = require("common/library_font")
     local VerticalGroup = require("ui/widget/verticalgroup")
     local VerticalSpan = require("ui/widget/verticalspan")
     local utils = require("common/utils")
@@ -693,7 +694,8 @@ local function apply_quick_settings()
         local num_buttons = #visible_buttons
         local action_btn_size = Screen:scaleBySize(64)
         local icon_size = math.floor(action_btn_size * 0.5)
-        local label_font = Font:getFace("xx_smallinfofont")
+        local label_size = Font.sizemap and Font.sizemap["xx_smallinfofont"] or 18
+        local label_font = library_font.getFace(label_size)
 
         local normal_border = Screen:scaleBySize(2)
 
@@ -803,7 +805,8 @@ local function apply_quick_settings()
 
         -- ----- Frontlight / warmth sliders -----
 
-        local medium_font     = Font:getFace("ffont")
+        local medium_size     = Font.sizemap and Font.sizemap["ffont"] or 24
+        local medium_font     = library_font.getFace(medium_size)
         local small_btn_size  = Screen:scaleBySize(14)
         local small_btn_width = Screen:scaleBySize(56)
         local toggle_width    = Screen:scaleBySize(56)

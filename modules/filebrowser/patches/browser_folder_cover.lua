@@ -29,6 +29,7 @@ local function apply_browser_folder_cover()
     local lfs = require("libs/libkoreader-lfs")
     local util = require("util")
     local paths = require("common/paths")
+    local library_font = require("common/library_font")
     local utils = require("common/utils")
     local IconWidget = require("ui/widget/iconwidget")
 
@@ -353,8 +354,22 @@ local function apply_browser_folder_cover()
         end
 
         local orig_folder_paintTo = MosaicMenuItem.paintTo
+        local _last_known_night = Device.screen.night_mode
         function MosaicMenuItem:paintTo(bb, x, y)
             orig_folder_paintTo(self, bb, x, y)
+            -- Fallback: detect night mode change at paint time and re-render all folder covers.
+            local _cur_night = Device.screen.night_mode
+            if _cur_night ~= _last_known_night then
+                _last_known_night = _cur_night
+                local _m = self.menu
+                if _m and not _m._zen_night_refresh_scheduled then
+                    _m._zen_night_refresh_scheduled = true
+                    UIManager:scheduleIn(0, function()
+                        _m._zen_night_refresh_scheduled = nil
+                        _m:updateItems()
+                    end)
+                end
+            end
             if self.is_go_up then return end
             local count = rawget(self, "_zen_folder_count")
             if not count then return end
@@ -373,8 +388,14 @@ local function apply_browser_folder_cover()
             local font_size  = math.max(7, math.floor(eff_size * 0.24))
 
             local tw = rawget(self, "_zen_badge_tw")
+            local _fc = _plugin or rawget(_G, "__ZEN_UI_PLUGIN")
+            local _bcc = _fc and type(_fc.config) == "table"
+                and type(_fc.config.browser_cover_badges) == "table"
+                and _fc.config.browser_cover_badges.badge_color
+            local badge_is_dark = type(_bcc) == "table" and _bcc[1] == 0 and _bcc[2] == 0 and _bcc[3] == 0
+            local badge_fg = badge_is_dark and _BlitBadge.COLOR_WHITE or _BlitBadge.COLOR_BLACK
             if tw then
-                if rawget(self, "_zen_badge_str") ~= count_str or rawget(self, "_zen_badge_fs") ~= font_size then
+                if rawget(self, "_zen_badge_str") ~= count_str or rawget(self, "_zen_badge_fs") ~= font_size or rawget(self, "_zen_badge_dark") ~= badge_is_dark then
                     if tw.free then tw:free() end
                     tw = nil
                 end
@@ -385,12 +406,13 @@ local function apply_browser_folder_cover()
                     text    = count_str,
                     face    = _FontBadge:getFace("cfont", font_size),
                     bold    = true,
-                    fgcolor = _BlitBadge.COLOR_BLACK,
+                    fgcolor = badge_is_dark and _BlitBadge.COLOR_WHITE or _BlitBadge.COLOR_BLACK,
                     padding = 0,
                 }
                 rawset(self, "_zen_badge_tw", tw)
                 rawset(self, "_zen_badge_str", count_str)
                 rawset(self, "_zen_badge_fs", font_size)
+                rawset(self, "_zen_badge_dark", badge_is_dark)
             end
 
             local tw_sz = tw:getSize()
@@ -400,8 +422,8 @@ local function apply_browser_folder_cover()
             local cx = cover_x + cd.w - r - inset
             local cy = cover_y + r + inset
 
-            paintCircle(bb, cx, cy, r + 2, _BlitBadge.COLOR_BLACK)
-            paintCircle(bb, cx, cy, r,     _BlitBadge.COLOR_LIGHT_GRAY)
+            paintCircle(bb, cx, cy, r + 2, badge_fg)
+            paintCircle(bb, cx, cy, r,     utils.getBadgeColor(_plugin and _plugin.config))
             tw:paintTo(bb,
                 cx - math.floor(tw_sz.w / 2),
                 cy - math.floor(tw_sz.h / 2)
@@ -566,6 +588,11 @@ local function apply_browser_folder_cover()
             local _t0_orig = os.clock()
             original_update(self, ...)
             _perf.orig_update_time = _perf.orig_update_time + (os.clock() - _t0_orig)
+            -- Invalidate cached folder covers when night mode changes (pre-baked blitbufs need re-render).
+            if self._foldercover_processed and not (self.entry.is_file or self.entry.file)
+                    and self._zen_render_night ~= Device.screen.night_mode then
+                self._foldercover_processed = nil
+            end
             if self._foldercover_processed or self.menu.no_refresh_covers then return end
             if (self.entry.is_file or self.entry.file) then
                 if not self.do_cover_image or not self.mandatory then return end
@@ -710,6 +737,7 @@ local function apply_browser_folder_cover()
             -- Handle "go up" item
             if self.entry.is_go_up then
                 self._foldercover_processed = true
+                self._zen_render_night = Device.screen.night_mode
                 local border = Folder.face.border_size
                 local max_w = self.width - 2 * border
                 local bh = self.height - 2 * border
@@ -720,7 +748,7 @@ local function apply_browser_folder_cover()
                 local arrow_size = math.min(portrait_w, portrait_h) * 0.25
                 local arrow_text = TextWidget:new{
                     text = "↑",
-                    face = Font:getFace("cfont", math.floor(arrow_size)),
+                    face = library_font.getFace(math.floor(arrow_size)),
                     fgcolor = Blitbuffer.COLOR_BLACK,
                 }
 
@@ -766,6 +794,7 @@ local function apply_browser_folder_cover()
             -- PathChooser: shape + name only
             if is_non_fm then
                 self._foldercover_processed = true
+                self._zen_render_night = Device.screen.night_mode
                 self:_setFolderCover { no_image = true }
                 return
             end
@@ -792,6 +821,7 @@ local function apply_browser_folder_cover()
             -- Pass the cover widget to _setFolderCover
             if cover_widget then
                 self._foldercover_processed = true
+                self._zen_render_night = Device.screen.night_mode
                 self:_setFolderCover { image_widget = cover_widget }
             else
                 self:_setFolderCover { no_image = true }
@@ -977,7 +1007,7 @@ local function apply_browser_folder_cover()
 
             local badge_ref = TextWidget:new {
                 text = "0",
-                face = Font:getFace("cfont", nb_font_size),
+                face = library_font.getFace(nb_font_size),
                 bold = true,
                 padding = 0,
             }
@@ -988,8 +1018,8 @@ local function apply_browser_folder_cover()
             if text:match("/$") then text = text:sub(1, -2) end
             text = BD.directory(text)
             local available_height = dimen.h - 2 * badge_h
-            local dir_font_size = Folder.face.dir_max_font_size
-            local min_font_size = 14
+            local dir_font_size = library_font.scaleValue(Folder.face.dir_max_font_size)
+            local min_font_size = library_font.scaleValue(14)
             local x_pad = Screen:scaleBySize(4)
             local text_w = dimen.w - 2 * x_pad
             local directory
@@ -1000,7 +1030,7 @@ local function apply_browser_folder_cover()
                 if probe then probe:free() end
                 probe = TextWidget:new {
                     text    = text,
-                    face    = Font:getFace("cfont", dir_font_size),
+                    face    = library_font.getFace(dir_font_size),
                     bold    = true,
                     padding = 0,
                 }
@@ -1016,7 +1046,7 @@ local function apply_browser_folder_cover()
                 probe:free()
                 directory = TextBoxWidget:new {
                     text      = text,
-                    face      = Font:getFace("cfont", dir_font_size),
+                    face      = library_font.getFace(dir_font_size),
                     width     = dimen.w,
                     alignment = "center",
                     bold      = true,
@@ -1024,14 +1054,14 @@ local function apply_browser_folder_cover()
             else
                 if probe then probe:free() end
                 local line_probe = TextWidget:new {
-                    text = "Ag", face = Font:getFace("cfont", min_font_size),
+                    text = "Ag", face = library_font.getFace(min_font_size),
                     bold = true, padding = 0,
                 }
                 local two_line_h = math.min(available_height, 2 * line_probe:getSize().h)
                 line_probe:free()
                 directory = TextBoxWidget:new {
                     text      = text,
-                    face      = Font:getFace("cfont", min_font_size),
+                    face      = library_font.getFace(min_font_size),
                     width     = dimen.w,
                     alignment = "center",
                     bold      = true,
@@ -1054,6 +1084,10 @@ local function apply_browser_folder_cover()
                 function ListMenuItem:update(...)
                     original_list_update(self, ...)
                     if self.entry.is_go_up then return end
+                    -- Invalidate cached folder covers when night mode changes.
+                    if self._foldercover_processed and self._zen_render_night ~= Device.screen.night_mode then
+                        self._foldercover_processed = nil
+                    end
                     if self._foldercover_processed or self.menu.no_refresh_covers then return end
                     if self.entry.is_file or self.entry.file then return end
                     local dir_path = self.entry and self.entry.path
@@ -1086,6 +1120,7 @@ local function apply_browser_folder_cover()
 
                     if cover_widget then
                         self._foldercover_processed = true
+                        self._zen_render_night = Device.screen.night_mode
                         self:_setListFolderCover { image_widget = cover_widget }
                     else
                         self:_setListFolderCover { no_image = true }
@@ -1102,8 +1137,12 @@ local function apply_browser_folder_cover()
 
                     local scale_by_size = Screen:scaleBySize(1000000) * (1 / 1000000)
                     local function _fontSize(nominal, max_size)
-                        local fs = math.floor(nominal * dimen_h * (1 / 64) / scale_by_size)
-                        if max_size and fs >= max_size then return max_size end
+                        local scale = library_font.getScale(18)
+                        local fs = math.floor(nominal * dimen_h * (1 / 64) / scale_by_size * scale + 0.5)
+                        if max_size then
+                            local max_scaled = math.max(1, math.floor(max_size * scale + 0.5))
+                            if fs >= max_scaled then return max_scaled end
+                        end
                         return fs
                     end
 
@@ -1194,8 +1233,8 @@ local function apply_browser_folder_cover()
                     local fs_right = _fontSize(16, 20)
                     local file_label = tostring(_file_count) .. " " .. (_file_count == 1 and _("Book") or _("Books"))
                     local dir_label = tostring(_dir_count) .. " " .. (_dir_count == 1 and _("Folder") or _("Folders"))
-                    local wfile = TextWidget:new{ text = file_label, face = Font:getFace("cfont", fs_right), padding = 0 }
-                    local wdir = TextWidget:new{ text = dir_label, face = Font:getFace("cfont", fs_right), padding = 0 }
+                    local wfile = TextWidget:new{ text = file_label, face = library_font.getFace(fs_right), padding = 0 }
+                    local wdir = TextWidget:new{ text = dir_label, face = library_font.getFace(fs_right), padding = 0 }
                     local wright_w = math.max(wfile:getWidth(), _dir_count > 0 and wdir:getWidth() or 0)
                     local wright_right_pad = pad
                     local wright = VerticalGroup:new{}
@@ -1207,13 +1246,26 @@ local function apply_browser_folder_cover()
                     if text:match("/$") then text = text:sub(1, -2) end
                     text = BD.directory(text)
                     local wmain_w = self.width - cover_zone_w - wmain_left_pad - pad - wright_w - wright_right_pad
+                    local text_safe_pad_top = math.max(2, Screen:scaleBySize(4))
+                    local text_safe_pad_bottom = math.max(2, Screen:scaleBySize(3))
+                    local content_h = math.max(1, dimen_h - text_safe_pad_top - text_safe_pad_bottom)
+                    local name_font_size = _fontSize(20, 24)
+                    name_font_size = math.min(name_font_size, math.max(9, math.floor(content_h * 0.45)))
+                    local name_probe = TextWidget:new {
+                        text = "Ag",
+                        face = library_font.getFace(name_font_size),
+                        bold = true,
+                        padding = 0,
+                    }
+                    local name_h = math.min(content_h, name_probe:getSize().h * 2)
+                    name_probe:free()
                     local wname = TextBoxWidget:new {
                         text = text,
-                        face = Font:getFace("cfont", _fontSize(20, 24)),
+                        face = library_font.getFace(name_font_size),
                         width = math.max(wmain_w, 0),
                         alignment = "left",
                         bold = true,
-                        height = dimen_h,
+                        height = name_h,
                         height_adjust = true,
                         height_overflow_show_ellipsis = true,
                     }
@@ -1228,7 +1280,10 @@ local function apply_browser_folder_cover()
                             HorizontalGroup:new {
                                 HorizontalSpan:new { width = cover_zone_w },
                                 HorizontalSpan:new { width = wmain_left_pad },
-                                wname,
+                                VerticalGroup:new {
+                                    VerticalSpan:new { width = text_safe_pad_top },
+                                    wname,
+                                },
                             },
                         },
                         RightContainer:new {
@@ -1312,6 +1367,25 @@ local function apply_browser_folder_cover()
                     self.file_chooser:updateItems()
                 end
             end)
+        end
+    end
+
+    -- Primary hook: intercept setNightMode so folder covers re-render immediately
+    -- on hardware night mode toggle (where paintTo is not called after the flip).
+    local _orig_setNightMode = Device.screen.setNightMode
+    if type(_orig_setNightMode) == "function" then
+        Device.screen.setNightMode = function(screen, night_mode, ...)
+            _orig_setNightMode(screen, night_mode, ...)
+            local fm = require("apps/filemanager/filemanager")
+            local fc = fm and rawget(fm, "instance") and rawget(fm, "instance").file_chooser
+            if fc and not fc._zen_night_refresh_scheduled then
+                fc._zen_night_refresh_scheduled = true
+                local UIM = require("ui/uimanager")
+                UIM:scheduleIn(0, function()
+                    fc._zen_night_refresh_scheduled = nil
+                    if fc.updateItems then fc:updateItems() end
+                end)
+            end
         end
     end
 end

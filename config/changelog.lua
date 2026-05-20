@@ -66,6 +66,8 @@ return {
         "Updated customization options for reader status bars (Reader > Top/Bottom Status bar)",
         "Add support for custom folder covers with image files",
         "Add support for more custom icons in Quick settings & Navbar",
+        "Add support for setting font and font size in library",
+        "Add color options for badges",
         "Updated placeholders for folders/books",
         "Add better support for legacy/non-touch devices",
         "Add refresh cached book info to edit menu",

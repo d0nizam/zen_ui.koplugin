@@ -173,18 +173,26 @@ local function apply_browser_page_count()
             local tw_fs = rawget(self, "_zen_pages_fs")
             local tw_str = rawget(self, "_zen_pages_str")
 
-            if not tw or tw_fs ~= font_size or tw_str ~= page_str then
+            local _pc = _plugin or rawget(_G, "__ZEN_UI_PLUGIN")
+            local _bcc = _pc and type(_pc.config) == "table"
+                and type(_pc.config.browser_cover_badges) == "table"
+                and _pc.config.browser_cover_badges.badge_color
+            local badge_is_dark = type(_bcc) == "table" and _bcc[1] == 0 and _bcc[2] == 0 and _bcc[3] == 0
+            local badge_fg = badge_is_dark and Blitbuffer.COLOR_WHITE or Blitbuffer.COLOR_BLACK
+
+            if not tw or tw_fs ~= font_size or tw_str ~= page_str or rawget(self, "_zen_pages_dark") ~= badge_is_dark then
                 if tw and tw.free then tw:free() end
                 tw = TextWidget:new{
                     text    = page_str,
                     face    = Font:getFace("cfont", font_size),
                     bold    = true,
-                    fgcolor = Blitbuffer.COLOR_BLACK,
+                    fgcolor = badge_is_dark and Blitbuffer.COLOR_WHITE or Blitbuffer.COLOR_BLACK,
                     padding = 0,
                 }
                 rawset(self, "_zen_pages_tw", tw)
                 rawset(self, "_zen_pages_fs", font_size)
                 rawset(self, "_zen_pages_str", page_str)
+                rawset(self, "_zen_pages_dark", badge_is_dark)
             end
 
             local tw_sz  = tw:getSize()
@@ -198,8 +206,8 @@ local function apply_browser_page_count()
             local by     = cover_bottom - bh - inset
 
             -- 7. Paint pill: 2-px border offset (matches cover badge pattern).
-            paintPill(bb, bx - 2, by - 2, bw + 4, bh + 4, Blitbuffer.COLOR_BLACK)
-            paintPill(bb, bx, by, bw, bh, Blitbuffer.COLOR_LIGHT_GRAY)
+            paintPill(bb, bx - 2, by - 2, bw + 4, bh + 4, badge_fg)
+            paintPill(bb, bx, by, bw, bh, utils.getBadgeColor(_plugin and _plugin.config))
 
             -- 8. Paint text centred inside the pill.
             tw:paintTo(bb,

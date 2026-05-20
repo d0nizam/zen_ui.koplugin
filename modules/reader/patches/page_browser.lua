@@ -10,6 +10,7 @@ local function apply_page_browser()
     local UIManager    = require("ui/uimanager")
     local Event        = require("ui/event")
     local ZenTocWidget = require("modules/reader/zen_toc_widget")
+    local ConfigManager = require("config/manager")
     local utils        = require("common/utils")
 
     -- -----------------------------------------------------------------------
@@ -29,6 +30,44 @@ local function apply_page_browser()
     -- so reading it inside gesture handlers would always return nil.
     local _plugin_ref = rawget(_G, "__ZEN_UI_PLUGIN")
     ZenTocWidget.set_plugin(_plugin_ref)
+
+    local function get_page_browser_layout()
+        local cfg = _plugin_ref and _plugin_ref.config
+        if type(cfg) == "table" and type(cfg.reader_page_browser) == "table" then
+            local layout = cfg.reader_page_browser.layout
+            if layout == "single" or layout == "grid" then
+                return layout
+            end
+        end
+        local g_settings = rawget(_G, "G_reader_settings")
+        local legacy = g_settings and g_settings:readSetting("zen_page_browser_layout")
+        if legacy == "single" or legacy == "grid" then
+            return legacy
+        end
+        return "grid"
+    end
+
+    local function set_page_browser_layout(layout)
+        if layout ~= "single" and layout ~= "grid" then return end
+        if _plugin_ref and type(_plugin_ref.config) == "table" then
+            if type(_plugin_ref.config.reader_page_browser) ~= "table" then
+                _plugin_ref.config.reader_page_browser = {}
+            end
+            _plugin_ref.config.reader_page_browser.layout = layout
+            if type(_plugin_ref.saveConfig) == "function" then
+                _plugin_ref:saveConfig()
+                return
+            end
+        end
+        local ok, cfg = pcall(ConfigManager.load)
+        if not ok or type(cfg) ~= "table" then return end
+        if type(cfg.reader_page_browser) ~= "table" then
+            cfg.reader_page_browser = {}
+        end
+        cfg.reader_page_browser.layout = layout
+        pcall(ConfigManager.save, cfg)
+    end
+
     local function is_enabled()
         local features = _plugin_ref
             and _plugin_ref.config
@@ -279,8 +318,7 @@ local function apply_page_browser()
             -- Restore last-used layout; default to grid so thumbnails are small
             -- and render quickly on slower devices (e.g. Kindle PW4).
             -- Single-page mode is only used when the user explicitly chose it.
-            local _saved_layout = G_reader_settings
-                and G_reader_settings:readSetting("zen_page_browser_layout")
+            local _saved_layout = get_page_browser_layout()
             if _saved_layout == "single" then
                 self._zen_nb_cols_override = 1
                 self._zen_nb_rows_override = 1
@@ -871,9 +909,7 @@ local function apply_page_browser()
             local _switch_single = function()
                 pbw._zen_nb_cols_override = 1
                 pbw._zen_nb_rows_override = 1
-                if G_reader_settings then
-                    G_reader_settings:saveSetting("zen_page_browser_layout", "single")
-                end
+                set_page_browser_layout("single")
                 logger.dbg("ZenUI page_browser: switch to single page")
                 pbw:updateLayout()
                 UIManager:setDirty(pbw, function() return "partial", pbw.dimen end)
@@ -881,9 +917,7 @@ local function apply_page_browser()
             local _switch_grid = function()
                 pbw._zen_nb_cols_override = pbw._zen_orig_nb_cols or 3
                 pbw._zen_nb_rows_override = pbw._zen_orig_nb_rows or 5
-                if G_reader_settings then
-                    G_reader_settings:saveSetting("zen_page_browser_layout", "grid")
-                end
+                set_page_browser_layout("grid")
                 logger.dbg("ZenUI page_browser: switch to grid")
                 pbw:updateLayout()
                 UIManager:setDirty(pbw, function() return "partial", pbw.dimen end)

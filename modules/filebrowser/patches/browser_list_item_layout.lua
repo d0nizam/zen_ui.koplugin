@@ -7,7 +7,6 @@ local function apply_browser_list_item_layout()
     local Blitbuffer = require("ffi/blitbuffer")
     local CenterContainer = require("ui/widget/container/centercontainer")
     local Device = require("device")
-    local Font = require("ui/font")
     local FrameContainer = require("ui/widget/container/framecontainer")
     local HorizontalGroup = require("ui/widget/horizontalgroup")
     local HorizontalSpan = require("ui/widget/horizontalspan")
@@ -23,6 +22,7 @@ local function apply_browser_list_item_layout()
     local VerticalGroup = require("ui/widget/verticalgroup")
     local VerticalSpan = require("ui/widget/verticalspan")
     local filemanagerutil = require("apps/filemanager/filemanagerutil")
+    local library_font = require("common/library_font")
     local util = require("util")
     local zen_utils = require("common/utils")
     local _ = require("gettext")
@@ -77,23 +77,52 @@ local function apply_browser_list_item_layout()
         local original_update = ListMenuItem.update
 
         function ListMenuItem:update()
-            -- Only intercept file items in cover-image mode that have been indexed.
-            -- Folders and the loading-spinner path fall through to the original.
+            -- Intercept list mode (no covers) to fix directory text wrapping
             if not self.do_cover_image then
-                return original_update(self)
+                original_update(self)
+                local is_dir = not (self.entry.is_file or self.entry.file)
+                if is_dir then
+                    -- Fix folder name widget (TextBoxWidget) overflowing to 3+ lines in list mode
+                    pcall(function()
+                        local widget = self[1] and self[1][1] and self[1][1][2]
+                        local wleft = widget and widget[1] and widget[1][1] and widget[1][1][2]
+                        if wleft and wleft.height_adjust and wleft.getLineHeight then
+                            local library_font = require("common/library_font")
+                            local scale = library_font.getScale(18)
+                            local Screen = require("device").screen
+                            local scale_by_size = Screen:scaleBySize(1000000) * (1/1000000)
+                            local dimen_h = self.height - 2
+                            local fs = math.floor(20 * dimen_h * (1 / 64) / scale_by_size * scale + 0.5)
+                            local max_scaled = math.max(1, math.floor(24 * scale + 0.5))
+                            if fs > max_scaled then fs = max_scaled end
+
+                            wleft:free(true)
+                            wleft.face = library_font.getFace(fs)
+                            wleft:init() -- init once to compute font metrics
+
+                            local lh = wleft:getLineHeight()
+                            wleft.height_adjust = false -- CRITICAL: prevent it from expanding
+                            wleft.height = lh * 2
+
+                            wleft:free(true)
+                            wleft:init() -- re-measure limited to max 2 lines
+                        end
+                    end)
+                end
+                return
             end
 
             local is_dir = not (self.entry.is_file or self.entry.file)
             if is_dir then
-                if not self.entry.is_go_up then
-                    return original_update(self)
-                end
-                -- Render the up-folder row with the same cover-zone and rounded-
-                -- corners treatment as other list items, but with a plain folder
-                -- placeholder and "⬆ ../" as the title.
+                -- Render all directory rows (up-folder and regular folders) with the
+                -- same padded layout so long names never overlap the top separator.
                 do
+                    local is_go_up = self.entry.is_go_up
                     local underline_h = 1
                     local dimen_h     = self.height - 2 * underline_h
+                    local text_safe_pad_top = math.max(2, Screen:scaleBySize(4))
+                    local text_safe_pad_bottom = math.max(2, Screen:scaleBySize(3))
+                    local content_h = math.max(1, dimen_h - text_safe_pad_top - text_safe_pad_bottom)
                     local border_size = Size.border.thin
                     local cover_v_pad = Screen:scaleBySize(4)
                     local cover_zone_w = dimen_h
@@ -102,12 +131,17 @@ local function apply_browser_list_item_layout()
                     local cover_w = math.floor(max_img * ratio)
 
                     local function _fontSize(nominal, max_size)
-                        local fs = math.floor(nominal * dimen_h * (1 / 64) / scale_by_size)
-                        if max_size and fs >= max_size then return max_size end
+                        local scale = library_font.getScale(18)
+                        local fs = math.floor(nominal * dimen_h * (1 / 64) / scale_by_size * scale + 0.5)
+                        if max_size then
+                            local max_scaled = math.max(1, math.floor(max_size * scale + 0.5))
+                            if fs >= max_scaled then return max_scaled end
+                        end
                         return fs
                     end
 
-                    -- Folder-icon placeholder (same style as book placeholder)
+                    -- Folder icon: open for up-folder, outline for regular directories
+                    local folder_icon = is_go_up and "\u{F024B}" or "\u{F024A}"
                     local cover_frame = FrameContainer:new{
                         width = cover_w + 2 * border_size,
                         height = max_img + 2 * border_size,
@@ -115,8 +149,8 @@ local function apply_browser_list_item_layout()
                         CenterContainer:new{
                             dimen = { w = cover_w, h = max_img },
                             TextWidget:new{
-                                text = "\u{F024B}",  -- mdi-folder-open-outline
-                                face = Font:getFace("cfont", _fontSize(20)),
+                                text = folder_icon,
+                                face = library_font.getFace(_fontSize(20)),
                             },
                         },
                     }
@@ -127,15 +161,58 @@ local function apply_browser_list_item_layout()
                     self._cover_frame = cover_frame
 
                     local pad_left = Screen:scaleBySize(6)
+                    local pad_right = Screen:scaleBySize(10)
                     local left_offset = cover_zone_w + pad_left
-                    local main_w = math.max(1, self.width - left_offset)
                     local fs_title = _fontSize(18, 21)
+                    fs_title = math.min(fs_title, math.max(9, math.floor(content_h * 0.45)))
+                    local title_text = is_go_up
+                        and (BD.mirroredUILayout() and BD.ltr("../ \u{F062}") or "\u{F062}  ../")
+                        or BD.directory(self.text)
 
+                    local right_widgets = {}
+                    local right_w = 0
+                    if not is_go_up and self.mandatory then
+                        local file_count = tonumber(self.mandatory:match("(%d+)%s*\xef\x80\x96")) or 0
+                        local dir_count = tonumber(self.mandatory:match("(%d+)%s*\xef\x84\x94")) or 0
+                        local fs_right = _fontSize(16, 20)
+                        fs_right = math.min(fs_right, math.max(8, math.floor(content_h * 0.34)))
+                        if dir_count > 0 then
+                            table.insert(right_widgets, TextWidget:new{
+                                text = tostring(dir_count) .. " " .. (dir_count == 1 and _("Folder") or _("Folders")),
+                                face = library_font.getFace(fs_right),
+                                padding = 0,
+                            })
+                        end
+                        table.insert(right_widgets, TextWidget:new{
+                            text = tostring(file_count) .. " " .. (file_count == 1 and _("Book") or _("Books")),
+                            face = library_font.getFace(fs_right),
+                            padding = 0,
+                        })
+                        for _i, widget in ipairs(right_widgets) do
+                            right_w = math.max(right_w, widget:getWidth())
+                        end
+                        local right_available = math.max(0, self.width - left_offset - 2 * pad_right)
+                        right_w = math.min(right_w, math.floor(right_available * 0.45))
+                    end
+
+                    local main_w = math.max(1, self.width - left_offset - right_w - 2 * pad_right)
+                    local line_probe = TextWidget:new{
+                        text = "Ag",
+                        face = library_font.getFace(fs_title),
+                        bold = true,
+                        padding = 0,
+                    }
+                    local title_h = math.min(content_h, line_probe:getSize().h * 2)
+                    line_probe:free()
                     local wtitle = TextBoxWidget:new{
-                        text  = BD.mirroredUILayout() and BD.ltr("../ ⬆") or "⬆  ../",
-                        face  = Font:getFace("cfont", fs_title),
-                        bold  = true,
+                        text = title_text,
+                        face = library_font.getFace(fs_title),
                         width = main_w,
+                        height = title_h,
+                        height_adjust = true,
+                        height_overflow_show_ellipsis = true,
+                        alignment = "left",
+                        bold = true,
                     }
                     local row_dimen = { w = self.width, h = dimen_h }
                     local widget = OverlapGroup:new{
@@ -145,16 +222,30 @@ local function apply_browser_list_item_layout()
                             HorizontalGroup:new{
                                 wleft,
                                 HorizontalSpan:new{ width = pad_left },
-                                CenterContainer:new{
+                                LeftContainer:new{
                                     dimen = { w = main_w, h = dimen_h },
-                                    LeftContainer:new{
-                                        dimen = { w = main_w, h = dimen_h },
+                                    VerticalGroup:new{
+                                        VerticalSpan:new{ width = text_safe_pad_top },
                                         wtitle,
                                     },
                                 },
                             },
                         },
                     }
+                    if #right_widgets > 0 then
+                        local right_stack = VerticalGroup:new{ align = "right" }
+                        table.insert(right_stack, VerticalSpan:new{ width = text_safe_pad_top })
+                        for _i, right_widget in ipairs(right_widgets) do
+                            table.insert(right_stack, right_widget)
+                        end
+                        table.insert(widget, RightContainer:new{
+                            dimen = row_dimen,
+                            HorizontalGroup:new{
+                                right_stack,
+                                HorizontalSpan:new{ width = pad_right },
+                            },
+                        })
+                    end
                     if self._underline_container[1] then
                         self._underline_container[1]:free()
                     end
@@ -185,8 +276,12 @@ local function apply_browser_list_item_layout()
 
             -- Font sizing identical to listmenu.lua's internal _fontSize closure.
             local function _fontSize(nominal, max_size)
-                local fs = math.floor(nominal * dimen_h * (1 / 64) / scale_by_size)
-                if max_size and fs >= max_size then return max_size end
+                local scale = library_font.getScale(18)
+                local fs = math.floor(nominal * dimen_h * (1 / 64) / scale_by_size * scale + 0.5)
+                if max_size then
+                    local max_scaled = math.max(1, math.floor(max_size * scale + 0.5))
+                    if fs >= max_scaled then return max_scaled end
+                end
                 return fs
             end
 
@@ -389,75 +484,119 @@ local function apply_browser_list_item_layout()
             local fs_title   = _fontSize(18, 21)
             local fs_meta    = _fontSize(14, 18)
             local fs_right   = _fontSize(14, 18)
+            local text_safe_pad_top = math.max(2, Screen:scaleBySize(4))
+            local text_safe_pad_bottom = math.max(2, Screen:scaleBySize(3))
+            local content_h = math.max(1, dimen_h - text_safe_pad_top - text_safe_pad_bottom)
+
+            -- Keep text readable but bounded to the usable content height.
+            fs_title = math.min(fs_title, math.max(9, math.floor(content_h * 0.45)))
+            fs_meta = math.min(fs_meta, math.max(8, math.floor(content_h * 0.34)))
+            fs_right = math.min(fs_right, math.max(8, math.floor(content_h * 0.34)))
 
             local left_offset = self.do_cover_image and (cover_zone_w + pad_left) or pad_left
 
-            -- ── Step 1: build status widget at its natural width ─────────────
-            local wright_status, status_nat_w = nil, 0
+            -- ── Step 1: compute right-column natural widths ───────────────────
+            local status_nat_w, pages_nat_w = 0, 0
+            local fs_pages = math.max(7, fs_right - 2)
+            local pages_str
             if status_label then
                 if progress_str then
-                    local icon_w = TextWidget:new{
+                    local icon_probe = TextWidget:new{
                         text    = progress_str,
-                        face    = Font:getFace("cfont", fs_right),
+                        face    = library_font.getFace(fs_right),
                         fgcolor = fgcolor,
                         padding = 0,
                     }
-                    local label_w = TextWidget:new{
+                    local label_probe = TextWidget:new{
                         text    = " " .. status_label,
-                        face    = Font:getFace("cfont", fs_right),
+                        face    = library_font.getFace(fs_right),
                         fgcolor = fgcolor,
                         padding = 0,
+                    }
+                    status_nat_w = icon_probe:getWidth() + label_probe:getWidth()
+                    icon_probe:free()
+                    label_probe:free()
+                else
+                    local status_probe = TextWidget:new{
+                        text    = status_label,
+                        face    = library_font.getFace(fs_right),
+                        fgcolor = fgcolor,
+                        padding = 0,
+                    }
+                    status_nat_w = status_probe:getWidth()
+                    status_probe:free()
+                end
+            end
+            if pages and pages > 0 and not self.do_filename_only then
+                pages_str = zen_utils.formatPageCount(pages, true)
+                local pages_probe = TextWidget:new{
+                    text    = pages_str,
+                    face    = library_font.getFace(fs_pages),
+                    padding = 0,
+                }
+                pages_nat_w = pages_probe:getWidth()
+                pages_probe:free()
+            end
+
+            -- Clamp right-column width so oversized fonts do not push content outside row.
+            local right_available = math.max(0, self.width - left_offset - 2 * pad_right)
+            local max_right_w = math.floor(right_available * 0.45)
+            local wright_w = math.max(status_nat_w, pages_nat_w)
+            if max_right_w > 0 then
+                wright_w = math.min(wright_w, max_right_w)
+            end
+
+            -- ── Step 2: build right-column widgets with clamped width ─────────
+            local wright_status, wright_pages
+            if status_label and wright_w > 0 then
+                if progress_str then
+                    local icon_w = TextWidget:new{
+                        text    = progress_str,
+                        face    = library_font.getFace(fs_right),
+                        fgcolor = fgcolor,
+                        padding = 0,
+                    }
+                    local label_max_w = math.max(1, wright_w - icon_w:getWidth())
+                    local label_w = TextWidget:new{
+                        text      = " " .. status_label,
+                        face      = library_font.getFace(fs_right),
+                        fgcolor   = fgcolor,
+                        padding   = 0,
+                        max_width = label_max_w,
                     }
                     wright_status = HorizontalGroup:new{
                         icon_w,
                         label_w,
                     }
-                    status_nat_w = icon_w:getWidth() + label_w:getWidth()
                 else
                     wright_status = TextWidget:new{
-                        text    = status_label,
-                        face    = Font:getFace("cfont", fs_right),
-                        fgcolor = fgcolor,
-                        padding = 0,
+                        text      = status_label,
+                        face      = library_font.getFace(fs_right),
+                        fgcolor   = fgcolor,
+                        padding   = 0,
+                        max_width = math.max(1, wright_w),
                     }
-                    status_nat_w = wright_status:getWidth()
                 end
             end
-
-            -- ── Step 2: right column width (status + pages; tags move to left) ─
-            local wright_w = status_nat_w
-
-            -- ── Page count (below status in right column) ────────────────────
-            local wright_pages
-            if pages and pages > 0 and not self.do_filename_only then
-                local fs_pages = math.max(7, fs_right - 2)
-                local pages_str = zen_utils.formatPageCount(pages, true)
-                local pages_probe = TextWidget:new{
-                    text    = pages_str,
-                    face    = Font:getFace("cfont", fs_pages),
-                    padding = 0,
-                }
-                local pages_nat_w = pages_probe:getWidth()
-                pages_probe:free()
-                wright_w = math.max(wright_w, pages_nat_w)
+            if pages_str and wright_w > 0 then
                 wright_pages = TextWidget:new{
                     text      = pages_str,
-                    face      = Font:getFace("cfont", fs_pages),
+                    face      = library_font.getFace(fs_pages),
                     fgcolor   = Blitbuffer.COLOR_GRAY_3,
                     padding   = 0,
-                    max_width = wright_w,
+                    max_width = math.max(1, wright_w),
                 }
             end
 
             local main_w = math.max(1, self.width - left_offset - wright_w - 2 * pad_right)
 
             -- ── Text stack (title / authors / series) ────────────────────────
-            local function make_text_line(text, face, bold_flag)
+            local function make_text_line(text, bold_flag)
                 return TextBoxWidget:new{
                     text = text,
-                    face = Font:getFace(face, bold_flag and fs_title or fs_meta),
+                    face = bold_flag and library_font.getFace(fs_title) or library_font.getFace(fs_meta),
                     width = main_w,
-                    height = dimen_h,          -- will shrink via height_adjust
+                    height = content_h,          -- will shrink via height_adjust
                     height_adjust = true,
                     height_overflow_show_ellipsis = true,
                     alignment = "left",
@@ -466,14 +605,14 @@ local function apply_browser_list_item_layout()
                 }
             end
 
-            local wtitle = make_text_line(title, "cfont", true)
+            local wtitle = make_text_line(title, true)
 
             -- Authors: single line, truncated with ellipsis
             local wauthors
             if authors then
                 wauthors = TextWidget:new{
                     text      = authors:gsub("\n", " "),
-                    face      = Font:getFace("cfont", fs_meta),
+                    face      = library_font.getFace(fs_meta),
                     max_width = main_w,
                     fgcolor   = fgcolor,
                     padding   = 0,
@@ -485,41 +624,62 @@ local function apply_browser_list_item_layout()
             if tags_str then
                 wtags_left = TextWidget:new{
                     text      = tags_str,
-                    face      = Font:getFace("cfont", math.max(7, fs_meta - 2)),
+                    face      = library_font.getFace(math.max(7, fs_meta - 2)),
                     max_width = main_w,
                     fgcolor   = Blitbuffer.COLOR_GRAY_3,
                     padding   = 0,
                 }
             end
 
-            local wseries = series_str and make_text_line(series_str, "cfont", false) or nil
+            local wseries
+            if series_str then
+                wseries = TextWidget:new{
+                    text      = series_str,
+                    face      = library_font.getFace(fs_meta),
+                    max_width = main_w,
+                    fgcolor   = fgcolor,
+                    padding   = 0,
+                }
+            end
 
-            -- Constrain variable-height widgets (title, series) to available space
-            local authors_h  = wauthors   and wauthors:getSize().h   or 0
-            local tags_lh    = wtags_left and wtags_left:getSize().h  or 0
-            local series_h   = wseries    and wseries:getSize().h     or 0
-            local title_h    = wtitle:getSize().h
-            local total_h    = title_h + authors_h + tags_lh + series_h
+            -- Fit metadata stack to row height. Keep title visible, then add
+            -- optional lines only while there is room.
+            local optional_widgets = {}
+            if wauthors then table.insert(optional_widgets, wauthors) end
+            if wseries then table.insert(optional_widgets, wseries) end
+            if wtags_left then table.insert(optional_widgets, wtags_left) end
 
-            if total_h > dimen_h then
-                local n_var   = 1 + (wseries and 1 or 0)
-                local budget  = math.floor(math.max(1, dimen_h - authors_h - tags_lh) / n_var)
-                for _i, w in ipairs({wtitle, wseries}) do
-                    if w then
-                        w.height = budget
-                        w.height_adjust = true
-                        w.height_overflow_show_ellipsis = true
-                        w:free(true)
-                        w:init()
-                    end
+            local title_min_h = math.max(1, math.floor(content_h * 0.45))
+            local optional_budget = math.max(0, content_h - title_min_h)
+            local used_optional_h = 0
+            local visible_optional = {}
+
+            for _i, w in ipairs(optional_widgets) do
+                local h = w:getSize().h
+                if used_optional_h + h <= optional_budget then
+                    used_optional_h = used_optional_h + h
+                    table.insert(visible_optional, w)
+                else
+                    w:free()
                 end
             end
 
+            local title_budget = math.max(1, content_h - used_optional_h)
+            wtitle.height = title_budget
+            wtitle.height_adjust = true
+            wtitle.height_overflow_show_ellipsis = true
+            wtitle:free(true)
+            wtitle:init()
+
             local text_stack = VerticalGroup:new{ align = "left" }
             table.insert(text_stack, wtitle)
-            if wauthors   then table.insert(text_stack, wauthors)   end
-            if wtags_left then table.insert(text_stack, wtags_left) end
-            if wseries    then table.insert(text_stack, wseries)    end
+            for _i, w in ipairs(visible_optional) do
+                table.insert(text_stack, w)
+            end
+
+            local text_stack_container = VerticalGroup:new{ align = "left" }
+            table.insert(text_stack_container, VerticalSpan:new{ width = text_safe_pad_top })
+            table.insert(text_stack_container, text_stack)
 
             local wmain = LeftContainer:new{
                 dimen = { w = self.width, h = dimen_h },
@@ -527,7 +687,7 @@ local function apply_browser_list_item_layout()
                     HorizontalSpan:new{ width = left_offset },
                     LeftContainer:new{
                         dimen = { w = main_w, h = dimen_h },
-                        text_stack,
+                        text_stack_container,
                     },
                 },
             }
@@ -544,7 +704,15 @@ local function apply_browser_list_item_layout()
             end
 
             if wright_status or wright_pages then
+                if wright_status and wright_pages then
+                    local right_h = wright_status:getSize().h + wright_pages:getSize().h
+                    if right_h > content_h then
+                        wright_pages:free()
+                        wright_pages = nil
+                    end
+                end
                 local right_stack = VerticalGroup:new{ align = "right" }
+                table.insert(right_stack, VerticalSpan:new{ width = text_safe_pad_top })
                 if wright_status then table.insert(right_stack, wright_status) end
                 if wright_pages  then table.insert(right_stack, wright_pages)  end
                 table.insert(widget, RightContainer:new{

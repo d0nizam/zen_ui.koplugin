@@ -2,7 +2,7 @@
 -- Shared cover handling for filebrowser patches
 
 local Blitbuffer = require("ffi/blitbuffer")
-local Font = require("ui/font")
+local library_font = require("common/library_font")
 local TextBoxWidget = require("ui/widget/textboxwidget")
 local BD = require("ui/bidi")
 local _ = require("gettext")
@@ -133,13 +133,13 @@ function CoverUtils.genCover(filepath, target_w, target_h)
     local authors_color = Blitbuffer.ColorRGB32(8, 51, 93, 255)
 
     -- Title widget
-    local title_font_size = 20
-    local min_title_font = 10
+    local title_font_size = library_font.scaleValue(20)
+    local min_title_font = library_font.scaleValue(10)
     local title_widget = nil
 
     while title_font_size >= min_title_font do
         if title_widget then title_widget:free() end
-        local face = Font:getFace("ffont", title_font_size)
+        local face = library_font.getFace(title_font_size)
         title_widget = TextBoxWidget:new{
             text = title,
             face = face,
@@ -155,7 +155,7 @@ function CoverUtils.genCover(filepath, target_w, target_h)
 
     if title_widget:getSize().h > title_area_h then
         title_widget:free()
-        local face = Font:getFace("ffont", min_title_font)
+        local face = library_font.getFace(min_title_font)
         title_widget = TextBoxWidget:new{
             text = title,
             face = face,
@@ -172,13 +172,13 @@ function CoverUtils.genCover(filepath, target_w, target_h)
     title_widget.handleEvent = function() return false end
 
     -- Author widget
-    local authors_font_size = 16
-    local min_authors_font = 6
+    local authors_font_size = library_font.scaleValue(16)
+    local min_authors_font = library_font.scaleValue(6)
     local authors_widget = nil
 
     while authors_font_size >= min_authors_font do
         if authors_widget then authors_widget:free() end
-        local face = Font:getFace("ffont", authors_font_size)
+        local face = library_font.getFace(authors_font_size)
         authors_widget = TextBoxWidget:new{
             text = authors,
             face = face,
@@ -193,7 +193,7 @@ function CoverUtils.genCover(filepath, target_w, target_h)
 
     if authors_widget and authors_widget:getSize().h > author_area_h then
         authors_widget:free()
-        local face = Font:getFace("ffont", min_authors_font)
+        local face = library_font.getFace(min_authors_font)
         authors_widget = TextBoxWidget:new{
             text = authors,
             face = face,
@@ -327,7 +327,14 @@ function CoverUtils.collect(dir_path, chooser, max_covers, need_copy, entries)
                 table.insert(entries, { is_file = true, file = files[i].path })
             end
         else
-            entries = {}
+            -- lfs.dir failed (e.g. virtual path like a collection name);
+            -- try the chooser's item table as a fallback.
+            if chooser and type(chooser.genItemTableFromPath) == "function" then
+                local t = chooser.genItemTableFromPath()
+                entries = type(t) == "table" and t or {}
+            else
+                entries = {}
+            end
         end
     end
 
@@ -366,9 +373,13 @@ end
 -- DRAWING FUNCTIONS
 -- ============================================================
 
--- FrameContainer bg for covers: LIGHT_GRAY in both modes. In dark mode the
--- screen inverts it once → appears dark gray, matching gallery blank spaces.
+-- FrameContainer bg for covers: gray on eink (dark mode inverts once -> dark gray);
+-- white on LCD/non-eink where color inversion doesn't apply.
 local function coverBg()
+    local ok, Device = pcall(require, "device")
+    if ok and not Device:hasEinkScreen() then
+        return Blitbuffer.COLOR_WHITE
+    end
     return Blitbuffer.COLOR_LIGHT_GRAY
 end
 
@@ -579,28 +590,31 @@ end
 
 function CoverUtils.drawNoImage(folder_name, portrait_w, portrait_h, border)
     local CenterContainer = require("ui/widget/container/centercontainer")
+    local Device = require("device")
     local FrameContainer = require("ui/widget/container/framecontainer")
     local ImageWidget = require("ui/widget/imagewidget")
     local TextBoxWidget = require("ui/widget/textboxwidget")
 
     local final_bb = Blitbuffer.new(portrait_w, portrait_h, Blitbuffer.TYPE_BBRGB32)
-    local bg = Blitbuffer.COLOR_WHITE
+    local is_night = Device.screen and Device.screen.night_mode
+    local bg = is_night and Blitbuffer.COLOR_BLACK or Blitbuffer.COLOR_WHITE
+    local fg = is_night and Blitbuffer.COLOR_WHITE or Blitbuffer.COLOR_BLACK
     final_bb:fill(bg)
 
-    local font_size = 20
-    local min_font = 10
+    local font_size = library_font.scaleValue(20)
+    local min_font = library_font.scaleValue(10)
     local text_widget = nil
 
     while font_size >= min_font do
         if text_widget then text_widget:free() end
-        local face = Font:getFace("cfont", font_size)
+        local face = library_font.getFace(font_size)
         text_widget = TextBoxWidget:new{
             text = folder_name,
             face = face,
             width = portrait_w - 16,
             alignment = "center",
             bold = true,
-            fgcolor = Blitbuffer.COLOR_BLACK,
+            fgcolor = fg,
             bgcolor = bg,
         }
         if text_widget:getSize().h <= portrait_h - 10 then
@@ -613,14 +627,14 @@ function CoverUtils.drawNoImage(folder_name, portrait_w, portrait_h, border)
 
     if text_widget:getSize().h > portrait_h - 10 then
         text_widget:free()
-        local face = Font:getFace("cfont", min_font)
+        local face = library_font.getFace(min_font)
         text_widget = TextBoxWidget:new{
             text = folder_name,
             face = face,
             width = portrait_w - 16,
             alignment = "center",
             bold = true,
-            fgcolor = Blitbuffer.COLOR_BLACK,
+            fgcolor = fg,
             bgcolor = bg,
             height = portrait_h - 10,
             height_adjust = true,

@@ -214,9 +214,19 @@ function ZenScreen:paintTo(bb, x, y)
 
     -- Paint logo. Without a changelog use the original conservative sizing (pad*4, *0.75).
     -- With a changelog the logo_h is already measured to fit, so fill it tightly.
+    local has_cl = hdr_tw ~= nil
+    if has_cl then
+        -- If changelog is long enough that the logo would become tiny,
+        -- hide the logo entirely and give all room to text.
+        local min_logo_with_changelog = Screen:scaleBySize(140)
+        local logo_candidate = math.floor(math.min(L.sw - L.pad * 2, logo_h - L.pad * 2))
+        if logo_candidate < min_logo_with_changelog then
+            logo_h = 0
+        end
+    end
+
     if ImageWidget and _plugin_root ~= "" then
         local logo    = _plugin_root .. "/icons/zen_ui.svg"
-        local has_cl  = hdr_tw ~= nil
         -- Snap to integer: avoids post-render scaling that caused segfaults on Kobo.
         local logo_sz = has_cl
             and math.floor(math.min(L.sw - L.pad * 2, logo_h - L.pad * 2))

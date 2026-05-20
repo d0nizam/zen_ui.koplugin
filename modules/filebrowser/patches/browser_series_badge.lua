@@ -157,7 +157,14 @@ local function apply_browser_series_badge()
             local tw_fs = rawget(self, "_zen_series_fs")
             local tw_idx = rawget(self, "_zen_series_idx")
 
-            if not tw or tw_fs ~= font_size or tw_idx ~= series_idx then
+            local _sc = _plugin or rawget(_G, "__ZEN_UI_PLUGIN")
+            local _bcc = _sc and type(_sc.config) == "table"
+                and type(_sc.config.browser_cover_badges) == "table"
+                and _sc.config.browser_cover_badges.badge_color
+            local badge_is_dark = type(_bcc) == "table" and _bcc[1] == 0 and _bcc[2] == 0 and _bcc[3] == 0
+            local badge_fg = badge_is_dark and Blitbuffer.COLOR_WHITE or Blitbuffer.COLOR_BLACK
+
+            if not tw or tw_fs ~= font_size or tw_idx ~= series_idx or rawget(self, "_zen_series_dark") ~= badge_is_dark then
                 if tw and tw.free then tw:free() end
 
                 local function make_tw(label, sz)
@@ -165,7 +172,7 @@ local function apply_browser_series_badge()
                         text    = label,
                         face    = Font:getFace("cfont", sz),
                         bold    = true,
-                        fgcolor = Blitbuffer.COLOR_BLACK,
+                        fgcolor = badge_fg,
                         padding = 0,
                     }
                 end
@@ -206,13 +213,14 @@ local function apply_browser_series_badge()
                 rawset(self, "_zen_series_tw", tw)
                 rawset(self, "_zen_series_fs", font_size)
                 rawset(self, "_zen_series_idx", series_idx)
+                rawset(self, "_zen_series_dark", badge_is_dark)
             end
 
             local tw_sz = tw:getSize()
 
             -- 7. Paint circle: 2-px border ring then fill.
-            paintCircle(bb, cx, cy, r + 2, Blitbuffer.COLOR_BLACK)
-            paintCircle(bb, cx, cy, r, Blitbuffer.COLOR_LIGHT_GRAY)
+            paintCircle(bb, cx, cy, r + 2, badge_fg)
+            paintCircle(bb, cx, cy, r, utils.getBadgeColor(_plugin and _plugin.config))
 
             -- 8. Paint text centred inside the circle.
             tw:paintTo(bb,

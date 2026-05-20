@@ -258,6 +258,36 @@ function M.getBadgeScale(config)
     return 1.0
 end
 
+--- Returns the configured badge background color, or COLOR_LIGHT_GRAY if not set.
+--- @param config table|nil  the plugin config table (p.config)
+--- @return userdata  Blitbuffer color
+function M.getBadgeColor(config)
+    local Blitbuffer = require("ffi/blitbuffer")
+    local c = type(config) == "table"
+        and type(config.browser_cover_badges) == "table"
+        and config.browser_cover_badges.badge_color
+    if type(c) == "table" then
+        local r = math.max(0, math.min(255, tonumber(c[1]) or 204))
+        local g = math.max(0, math.min(255, tonumber(c[2]) or 204))
+        local b = math.max(0, math.min(255, tonumber(c[3]) or 204))
+        return Blitbuffer.ColorRGB32(r, g, b, 255)
+    end
+    return Blitbuffer.COLOR_LIGHT_GRAY
+end
+
+--- Returns the foreground color for text/icons drawn inside a badge.
+--- White when the badge fill is black (0,0,0), black otherwise.
+function M.getBadgeTextColor(config)
+    local Blitbuffer = require("ffi/blitbuffer")
+    local c = type(config) == "table"
+        and type(config.browser_cover_badges) == "table"
+        and config.browser_cover_badges.badge_color
+    if type(c) == "table" and c[1] == 0 and c[2] == 0 and c[3] == 0 then
+        return Blitbuffer.COLOR_WHITE
+    end
+    return Blitbuffer.COLOR_BLACK
+end
+
 --- Build the combined {name, file} icon list for the icon picker.
 --- Sources (in order, names deduplicated across groups, each sorted by name):
 ---   1. Zen UI plugin icons  (plugin_root/icons)

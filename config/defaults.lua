@@ -147,6 +147,10 @@ local defaults = {
         show_title  = false,
         show_author = false,
     },
+    library_font = {
+        font_face = "default",
+        font_size = 18,
+    },
     zen_scroll_bar = {
         style              = "dots",     -- "bar" | "dots" | "page_number"
         page_number_format = "total",  -- "current" | "total"
@@ -204,6 +208,23 @@ local defaults = {
     },
     stats_page = {
         rows = { "today", "this_month", "this_year", "all_time", "library" },
+    },
+    group_view = {
+        display_mode = {
+            authors = "list_image_meta",
+            series = "list_image_meta",
+            tags = "list_image_meta",
+            to_be_read = "list_image_meta",
+        },
+        detail_collate = {
+            authors = {},
+            series = {},
+            tags = {},
+            to_be_read = {},
+        },
+    },
+    reader_page_browser = {
+        layout = "grid",
     },
     lockdown = {
         disable_context_menu      = false,

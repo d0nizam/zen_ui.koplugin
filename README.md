@@ -194,4 +194,4 @@ See [SECURITY.md](SECURITY.md) for how to report vulnerabilities.
 
 ## License
 
-[GPL-3.0](LICENSE)
+[GPL-3.0](LICENSE.md)

@@ -18,6 +18,7 @@ local function apply_navbar()
     local UIManager = require("ui/uimanager")
     local VerticalGroup = require("ui/widget/verticalgroup")
     local VerticalSpan = require("ui/widget/verticalspan")
+    local library_font = require("common/library_font")
     local utils = require("common/utils")
     local paths = require("common/paths")
     local Screen = Device.screen
@@ -43,8 +44,6 @@ local function apply_navbar()
     -- === Layout constants ===
 
     local navbar_icon_size = Screen:scaleBySize(34)
-    local navbar_font = Font:getFace("smallinfofont", 20)
-    local navbar_font_bold = Font:getFace("smallinfofontbold", 20)
     local navbar_v_padding = Screen:scaleBySize(4)
     -- Dead zone at left/right edges to avoid stealing corner gesture taps
     local corner_dead_zone = math.floor(Screen:getWidth() / 20)
@@ -580,10 +579,10 @@ local function apply_navbar()
     -- Uses the bold face as the worst-case width so all tabs stay at the same size.
     local function getSharedFontSize(labels, max_w)
         for _, size in ipairs(navbar_font_size_steps) do
-            local bold_face = Font:getFace("smallinfofontbold", size)
+            local face = library_font.getFace(size)
             local all_fit = true
             for _, text in ipairs(labels) do
-                local probe = TextWidget:new{ text = text, face = bold_face }
+                local probe = TextWidget:new{ text = text, face = face, bold = true }
                 local fits = probe:getSize().w <= max_w
                 probe:free()
                 if not fits then all_fit = false; break end
@@ -626,12 +625,13 @@ local function apply_navbar()
         end
 
         local size = font_size or navbar_font_size_steps[1]
-        local label_face = Font:getFace(use_bold and "smallinfofontbold" or "smallinfofont", size)
+        local label_face = library_font.getFace(size)
         local label
         if active_color then
             label = ColorTextWidget:new{
                 text = tab.label,
                 face = label_face,
+                bold = use_bold,
                 max_width = label_max_w,
                 fgcolor = active_color,
             }
@@ -639,6 +639,7 @@ local function apply_navbar()
             label = TextWidget:new{
                 text = tab.label,
                 face = label_face,
+                bold = use_bold,
                 max_width = label_max_w,
             }
         end

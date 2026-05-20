@@ -24,11 +24,71 @@ local function apply_context_menu()
     local FrameContainer  = require("ui/widget/container/framecontainer")
     local HorizontalGroup = require("ui/widget/horizontalgroup")
     local HorizontalSpan  = require("ui/widget/horizontalspan")
-    local ImageWidget     = require("ui/widget/imagewidget")
     local TextWidget      = require("ui/widget/textwidget")
     local Font            = require("ui/font")
     local Geom            = require("ui/geometry")
     local Blitbuffer      = require("ffi/blitbuffer")
+    local library_font    = require("common/library_font")
+
+    local function apply_button_group_font(button_rows, nominal_size)
+        if type(button_rows) ~= "table" then return button_rows end
+        local size = library_font.scaleValue(nominal_size or 20)
+        for _i, row in ipairs(button_rows) do
+            if type(row) == "table" then
+                for _j, btn in ipairs(row) do
+                    if type(btn) == "table" and type(btn.text) == "string" then
+                        local face = btn.font_face or btn.text_font_face or library_font.getFontName()
+                        btn.font_face = face
+                    end
+                end
+            end
+        end
+        return button_rows
+    end
+
+    local function get_title_face_for_textviewer()
+        local default_title_face = Font:getFace("x_smalltfont")
+        local title_size = default_title_face and default_title_face.orig_size or 20
+        return Font:getFace(library_font.getFontName(), title_size)
+    end
+
+    local function apply_textviewer_body_font_family(tv)
+        if type(tv) ~= "table" then return end
+        if not tv.scroll_text_w then return end
+        local ScrollTextWidget = require("ui/widget/scrolltextwidget")
+        local body_size = tv.text_font_size
+        if type(body_size) ~= "number" or body_size <= 0 then
+            local text_widget = tv.scroll_text_w and tv.scroll_text_w.text_widget
+            body_size = text_widget and text_widget.face and text_widget.face.orig_size or 20
+        end
+
+        local textw_height = tv.height - tv.titlebar:getHeight() - tv.button_table:getSize().h
+        local new_scroll = ScrollTextWidget:new{
+            text = tv.text,
+            face = Font:getFace(library_font.getFontName(), body_size),
+            fgcolor = tv.fgcolor,
+            width = tv.width - 2 * tv.text_padding - 2 * tv.text_margin,
+            height = textw_height - 2 * tv.text_padding - 2 * tv.text_margin,
+            dialog = tv,
+            alignment = tv.alignment,
+            justified = tv.justified,
+            lang = tv.lang,
+            para_direction_rtl = tv.para_direction_rtl,
+            auto_para_direction = tv.auto_para_direction,
+            alignment_strict = tv.alignment_strict,
+            scroll_callback = tv._buttons_scroll_callback,
+        }
+
+        pcall(function()
+            if type(tv.scroll_text_w.free) == "function" then
+                tv.scroll_text_w:free(false)
+            end
+        end)
+        tv.scroll_text_w = new_scroll
+        if type(tv.textw) == "table" then
+            tv.textw[1] = new_scroll
+        end
+    end
 
     -- MoveChooser
     local MoveChooser = PathChooser:extend{ _zen_no_forced_repaint = true }
@@ -151,8 +211,141 @@ local function apply_context_menu()
 
         local file_chooser = self.file_chooser
         local file_manager = self
+        local logger = require("logger")
+        local ffiUtil_sel = require("ffi/util")
 
         local orig_showFileDialog = file_chooser.showFileDialog
+        local orig_onFileSelect = file_chooser.onFileSelect
+
+        local function resolveItemKey(item)
+            if type(item) ~= "table" then return nil end
+            return item.path or item.file or item.filepath
+        end
+
+        local function normalizeItemKey(key)
+            if type(key) ~= "string" or key == "" then return nil end
+            return ffiUtil_sel.realpath(key) or key
+        end
+
+        local function keysMatch(a, b, a_norm)
+            if not a or not b then return false end
+            if a == b then return true end
+            local an = a_norm or normalizeItemKey(a)
+            if not an then return false end
+            local bn = normalizeItemKey(b)
+            return bn and an == bn or false
+        end
+
+        local function findVisibleWidgetByKey(self_fc, item_key)
+            local item_norm = normalizeItemKey(item_key)
+
+            local layout = self_fc and self_fc.layout
+            if type(layout) == "table" then
+                for r, row in ipairs(layout) do
+                    if type(row) == "table" then
+                        for c, w in ipairs(row) do
+                            local entry = w and w.entry
+                            local entry_key = resolveItemKey(entry)
+                            if keysMatch(item_key, entry_key, item_norm) then
+                                return w, "layout", r, c
+                            end
+                        end
+                    end
+                end
+            end
+
+            local ig = self_fc and self_fc.item_group
+            if ig then
+                for i, w in ipairs(ig) do
+                    local entry = w and w.entry
+                    local entry_key = resolveItemKey(entry)
+                    if keysMatch(item_key, entry_key, item_norm) then
+                        return w, "item_group", i, nil
+                    end
+                    if type(w) == "table" then
+                        for j, child in ipairs(w) do
+                            local child_entry = child and child.entry
+                            local child_key = resolveItemKey(child_entry)
+                            if keysMatch(item_key, child_key, item_norm) then
+                                return child, "item_group_nested", i, j
+                            end
+                        end
+                    end
+                end
+            end
+
+            return nil, nil, nil, nil
+        end
+
+        if type(orig_onFileSelect) == "function" then
+            file_chooser.onFileSelect = function(self_fc, item)
+                logger.dbg("zen-ui:context_menu:onFileSelect",
+                    "select_mode=", tostring(file_manager.selected_files ~= nil),
+                    "is_file=", tostring(item and item.is_file),
+                    "path=", tostring(item and item.path),
+                    "file=", tostring(item and item.file),
+                    "filepath=", tostring(item and item.filepath),
+                    "dim_before=", tostring(item and item.dim))
+
+                if file_manager.selected_files then
+                    local item_key = resolveItemKey(item)
+                    if not item_key then
+                        logger.dbg("zen-ui:context_menu:onFileSelect", "no item key, fallback to original")
+                        return orig_onFileSelect(self_fc, item)
+                    end
+
+                    local widget, source, i1, i2 = findVisibleWidgetByKey(self_fc, item_key)
+                    logger.dbg("zen-ui:context_menu:onFileSelect",
+                        "item_key=", tostring(item_key),
+                        "layout_rows=", tostring(self_fc and self_fc.layout and #self_fc.layout or 0),
+                        "visible_items=", tostring(self_fc and self_fc.item_group and #self_fc.item_group or 0),
+                        "matched_source=", tostring(source),
+                        "idx1=", tostring(i1),
+                        "idx2=", tostring(i2))
+
+                    if not widget then
+                        logger.dbg("zen-ui:context_menu:onFileSelect", "no visible match, fallback to original (single toggle)")
+                        local ret = orig_onFileSelect(self_fc, item)
+                        logger.dbg("zen-ui:context_menu:onFileSelect",
+                            "fallback_return=", tostring(ret),
+                            "dim_after_fallback=", tostring(item and item.dim),
+                            "selected_after_fallback=", tostring(file_manager.selected_files[item_key]))
+                        return ret
+                    end
+
+                    item.dim = not item.dim and true or nil
+                    file_manager.selected_files[item_key] = item.dim
+                    logger.dbg("zen-ui:context_menu:onFileSelect",
+                        "dim_after=", tostring(item.dim),
+                        "selected_entry=", tostring(file_manager.selected_files[item_key]))
+
+                    local entry = widget.entry
+                    if entry then
+                        entry.dim = item.dim
+                        local entry_key = resolveItemKey(entry)
+                        if entry_key and entry_key ~= item_key then
+                            file_manager.selected_files[entry_key] = item.dim
+                        end
+                    end
+                    widget.dim = item.dim
+
+                    local d = (widget[1] and widget[1].dimen) or widget.dimen
+                    if d then
+                        local dirty_owner = self_fc.show_parent or self_fc
+                        UIManager:setDirty(dirty_owner, function()
+                            return "ui", d, dirty_owner.dithered
+                        end)
+                    end
+                    logger.dbg("zen-ui:context_menu:onFileSelect", "fast-path return true")
+                    return true
+                end
+                local ret = orig_onFileSelect(self_fc, item)
+                logger.dbg("zen-ui:context_menu:onFileSelect",
+                    "not_in_select_mode_return=", tostring(ret),
+                    "dim_after=", tostring(item and item.dim))
+                return ret
+            end
+        end
 
         file_chooser.showSortOrderDialog = function(self_fc, opts)
             local UIManager_sod    = require("ui/uimanager")
@@ -239,7 +432,6 @@ local function apply_context_menu()
                         for _i, fpath in ipairs(group_files) do
                             table.insert(entries, { path = fpath, is_file = true })
                         end
-                        table.sort(entries, function(a, b) return (a.path or "") < (b.path or "") end)
                         return entries
                     end
                 }
@@ -317,14 +509,14 @@ local function apply_context_menu()
                 local vstack = VerticalGroup:new{ align = "left" }
                 table.insert(vstack, TextWidget:new{
                     text = BD.auto(group_name),
-                    face = Font:getFace("cfont", 20),
+                    face = library_font.getFace(20),
                     bold = true,
                     max_width = text_col_w,
                 })
                 table.insert(vstack, VerticalSpan:new{ width = Screen:scaleBySize(2) })
                 table.insert(vstack, TextWidget:new{
                     text = subtitle,
-                    face = Font:getFace("cfont", 17),
+                    face = library_font.getFace(17),
                     max_width = text_col_w,
                 })
 
@@ -421,7 +613,7 @@ local function apply_context_menu()
                     filter_dialog = ButtonDialog:new{
                         title = _("Filter by status"),
                         title_align = "center",
-                        buttons = fbts,
+                        buttons = apply_button_group_font(fbts),
                     }
                     UIManager:show(filter_dialog)
                 end
@@ -452,7 +644,7 @@ local function apply_context_menu()
                 end
 
                 self_fc.file_dialog = ButtonDialog:new{
-                    buttons = buttons,
+                    buttons = apply_button_group_font(buttons),
                     _added_widgets = { header_widget },
                 }
                 UIManager:show(self_fc.file_dialog)
@@ -575,7 +767,6 @@ local function apply_context_menu()
                     local TextWidget = require("ui/widget/textwidget")
                     local VerticalGroup = require("ui/widget/verticalgroup")
                     local VerticalSpan = require("ui/widget/verticalspan")
-                    local Font = require("ui/font")
                     local Blitbuffer = require("ffi/blitbuffer")
                     local Geom = require("ui/geometry")
                     local fs_title = 20
@@ -585,7 +776,7 @@ local function apply_context_menu()
                     if title_str then
                         table.insert(vstack, TextWidget:new{
                             text = title_str,
-                            face = Font:getFace("cfont", fs_title),
+                            face = library_font.getFace(fs_title),
                             bold = true,
                             max_width = text_col_w,
                         })
@@ -594,7 +785,7 @@ local function apply_context_menu()
                         table.insert(vstack, VerticalSpan:new{ width = Screen:scaleBySize(2) })
                         table.insert(vstack, TextWidget:new{
                             text = authors_str,
-                            face = Font:getFace("cfont", fs_authors),
+                            face = library_font.getFace(fs_authors),
                             max_width = text_col_w,
                         })
                     end
@@ -602,7 +793,7 @@ local function apply_context_menu()
                         table.insert(vstack, VerticalSpan:new{ width = Screen:scaleBySize(2) })
                         table.insert(vstack, TextWidget:new{
                             text = series_str_arg,
-                            face = Font:getFace("cfont", fs_authors),
+                            face = library_font.getFace(fs_authors),
                             fgcolor = Blitbuffer.COLOR_GRAY_3,
                             max_width = text_col_w,
                         })
@@ -611,7 +802,7 @@ local function apply_context_menu()
                         table.insert(vstack, VerticalSpan:new{ width = Screen:scaleBySize(3) })
                         table.insert(vstack, TextWidget:new{
                             text = tags_str_arg,
-                            face = Font:getFace("cfont", fs_tags),
+                            face = library_font.getFace(fs_tags),
                             fgcolor = Blitbuffer.COLOR_GRAY_3,
                             max_width = text_col_w,
                         })
@@ -620,7 +811,7 @@ local function apply_context_menu()
                         table.insert(vstack, VerticalSpan:new{ width = Screen:scaleBySize(3) })
                         table.insert(vstack, TextWidget:new{
                             text = pages_str_arg,
-                            face = Font:getFace("cfont", fs_tags),
+                            face = library_font.getFace(fs_tags),
                             fgcolor = Blitbuffer.COLOR_GRAY_3,
                             max_width = text_col_w,
                         })
@@ -832,7 +1023,7 @@ local function apply_context_menu()
                         local vstack = VerticalGroup:new{ align = "left" }
                         table.insert(vstack, TextWidget:new{
                             text = folder_name_str,
-                            face = Font:getFace("cfont", 20),
+                            face = library_font.getFace(20),
                             bold = true,
                             max_width = text_col_w,
                         })
@@ -840,7 +1031,7 @@ local function apply_context_menu()
                             table.insert(vstack, VerticalSpan:new{ width = Screen:scaleBySize(2) })
                             table.insert(vstack, TextWidget:new{
                                 text = folder_count_str,
-                                face = Font:getFace("cfont", 17),
+                                face = library_font.getFace(17),
                                 max_width = text_col_w,
                             })
                         end
@@ -958,7 +1149,7 @@ local function apply_context_menu()
                     if title_line then
                         table.insert(vstack, TextWidget2:new{
                             text = title_line,
-                            face = Font2:getFace("cfont", 20),
+                            face = library_font.getFace(20),
                             bold = true,
                             max_width = text_col_w,
                         })
@@ -967,7 +1158,7 @@ local function apply_context_menu()
                         table.insert(vstack, VerticalSpan2:new{ width = Screen:scaleBySize(2) })
                         table.insert(vstack, TextWidget2:new{
                             text = sub_line,
-                            face = Font2:getFace("cfont", 17),
+                            face = library_font.getFace(17),
                             max_width = text_col_w,
                         })
                     end
@@ -975,7 +1166,7 @@ local function apply_context_menu()
                         table.insert(vstack, VerticalSpan2:new{ width = Screen:scaleBySize(3) })
                         table.insert(vstack, TextWidget2:new{
                             text = pages_str,
-                            face = Font2:getFace("cfont", 14),
+                            face = library_font.getFace(14),
                             fgcolor = Blitbuffer2.COLOR_GRAY_3,
                             max_width = text_col_w,
                         })
@@ -1000,7 +1191,7 @@ local function apply_context_menu()
 
                 if is_home_dir then
                     edit_dialog = ButtonDialog:new{
-                        buttons = {
+                        buttons = apply_button_group_font({
                             {{
                                 text = "\u{F0192}  " .. C_("File", "Paste"),
                                 align = "left",
@@ -1010,28 +1201,13 @@ local function apply_context_menu()
                                     file_manager:pasteFileFromClipboard(file)
                                 end,
                             }},
-                        },
+                        }),
                     }
                     UIManager:show(edit_dialog)
                     return
                 end
 
                 local edit_buttons = {
-                    {
-                        {
-                            text = "\u{F0489}  " .. _("Select"),
-                            align = "left",
-                            callback = function()
-                                UIManager:close(edit_dialog)
-                                file_manager:onToggleSelectMode()
-                                if is_file then
-                                    file_manager.selected_files[file] = true
-                                    item.dim = true
-                                    self_fc:updateItems(1, true)
-                                end
-                            end,
-                        },
-                    },
                     {
                         {
                             text = "\u{F0190}  " .. _("Cut"),
@@ -1066,10 +1242,25 @@ local function apply_context_menu()
                         },
                     },
                 }
+                if not item._zen_collection_name and not item._zen_disable_select then
+                    table.insert(edit_buttons, 1, {
+                        {
+                            text = "\u{F0489}  " .. _("Select"),
+                            align = "left",
+                            callback = function()
+                                UIManager:close(edit_dialog)
+                                file_manager:onToggleSelectMode()
+                                if is_file and type(self_fc.onFileSelect) == "function" then
+                                    self_fc:onFileSelect(item)
+                                end
+                            end,
+                        },
+                    })
+                end
                 if is_file then
                     table.insert(edit_buttons, {
                         {
-                            text = icons.refresh .. "  " .. _("Refresh cached book information"),
+                            text = icons.refresh .. "  " .. _("Refresh"),
                             align = "left",
                             callback = function()
                                 UIManager:close(edit_dialog)
@@ -1105,7 +1296,7 @@ local function apply_context_menu()
                 end
 
                 edit_dialog = ButtonDialog:new{
-                    buttons = edit_buttons,
+                    buttons = apply_button_group_font(edit_buttons),
                 }
                 UIManager:show(edit_dialog)
             end
@@ -1128,11 +1319,13 @@ local function apply_context_menu()
                             local tv
                             tv = TextViewer:new{
                                 title = _("Description"),
+                                title_face = get_title_face_for_textviewer(),
                                 text = desc_text,
                                 text_type = "book_info",
                                 buttons_table = {
                                     {{
                                         text = "\u{F02FD} " .. _("Book information"),
+                                        font_face = library_font.getFontName(),
                                         callback = function()
                                             UIManager:close(tv)
                                             file_manager.bookinfo:show(file)
@@ -1140,6 +1333,7 @@ local function apply_context_menu()
                                     }},
                                 },
                             }
+                            apply_textviewer_body_font_family(tv)
                             UIManager:show(tv)
                         end,
                     },
@@ -1387,12 +1581,12 @@ local function apply_context_menu()
                             status_dialog = ButtonDialog:new{
                                 title = _("Read status"),
                                 title_align = "center",
-                                buttons = {
+                                buttons = apply_button_group_font({
                                     statusBtn("\u{F0B64}", _("Unread"), nil),
                                     statusBtn("\u{F0B63}", _("Reading"), "reading"),
                                     statusBtn("\u{F0150}", _("To Be Read"), "abandoned"),
                                     statusBtn("\u{F012C}", _("Finished"), "complete"),
-                                },
+                                }),
                             }
                             UIManager:show(status_dialog)
                         end,
@@ -1436,11 +1630,11 @@ local function apply_context_menu()
                     view_dialog = ButtonDialog:new{
                         title = _("Display mode"),
                         title_align = "center",
-                        buttons = {
+                        buttons = apply_button_group_font({
                             viewBtn(_("Mosaic"), "\u{F11D9}", "mosaic_image"),
                             viewBtn(_("List (detailed)"), "\u{F148B}", "list_image_meta"),
                             viewBtn(_("List (basic)"), "\u{F0279}", "list_image_filename"),
-                        },
+                        }),
                     }
                     UIManager:show(view_dialog)
                 end
@@ -1510,7 +1704,7 @@ local function apply_context_menu()
                                     sort_dialog = ButtonDialog:new{
                                         title = _("Sort library by"),
                                         title_align = "center",
-                                        buttons = sort_buttons,
+                                        buttons = apply_button_group_font(sort_buttons),
                                     }
                                     UIManager:show(sort_dialog)
                                 end,
@@ -1578,7 +1772,7 @@ local function apply_context_menu()
                                     sort_dialog = ButtonDialog:new{
                                         title = _("Sort folder by"),
                                         title_align = "center",
-                                        buttons = sort_buttons,
+                                        buttons = apply_button_group_font(sort_buttons),
                                     }
                                     UIManager:show(sort_dialog)
                                 end,
@@ -1649,7 +1843,7 @@ local function apply_context_menu()
                     filter_dialog = ButtonDialog:new{
                         title = _("Filter by status"),
                         title_align = "center",
-                        buttons = fbts,
+                        buttons = apply_button_group_font(fbts),
                     }
                     UIManager:show(filter_dialog)
                 end
@@ -1692,7 +1886,7 @@ local function apply_context_menu()
             self_fc.file_dialog = ButtonDialog:new{
                 title = dlg_title ~= "" and dlg_title or nil,
                 title_align = "center",
-                buttons = buttons,
+                buttons = apply_button_group_font(buttons),
                 _added_widgets = dialog_cover_widget and { dialog_cover_widget } or nil,
             }
             UIManager:show(self_fc.file_dialog)

@@ -1,6 +1,7 @@
 local logger = require("logger")
 local icons  = require("common/inline_icon_map")
 local Cover  = require("common/cover_utils")
+local library_font = require("common/library_font")
 local OverlapGroup = require("ui/widget/overlapgroup")
 local CenterContainer = require("ui/widget/container/centercontainer")
 local VerticalGroup = require("ui/widget/verticalgroup")
@@ -33,6 +34,27 @@ local function apply_collections()
             and zen_plugin.config.status_bar or {}
         local hide = sb_cfg.hide_browser_bar
         return hide == true or hide == nil
+    end
+
+    local function apply_button_group_font(button_rows, nominal_size)
+        if type(button_rows) ~= "table" then return button_rows end
+        local size = library_font.scaleValue(nominal_size or 20)
+        for _i, row in ipairs(button_rows) do
+            if type(row) == "table" then
+                for _j, btn in ipairs(row) do
+                    if type(btn) == "table" and type(btn.text) == "string" then
+                        local face = btn.font_face or btn.text_font_face or library_font.getFontName()
+                        local fsize = btn.font_size or btn.text_font_size or size
+                        btn.font_face = face
+                        btn.font_size = fsize
+                        -- Keep legacy aliases for compatibility with non-ButtonTable paths.
+                        btn.text_font_face = face
+                        btn.text_font_size = fsize
+                    end
+                end
+            end
+        end
+        return button_rows
     end
 
     ---------------------------------------------------------------------------
@@ -94,6 +116,62 @@ local function apply_collections()
         return display_mode_type
     end
 
+    local function get_collection_files_in_cover_order(coll_name)
+        local ReadCollection = require("readcollection")
+        local coll = ReadCollection.coll[coll_name]
+        if type(coll) ~= "table" then return {} end
+
+        local sorted = {}
+        for _k, entry in pairs(coll) do
+            if type(entry) == "table" and type(entry.file) == "string" and entry.file ~= "" then
+                table.insert(sorted, entry)
+            end
+        end
+
+        table.sort(sorted, function(a, b)
+            local a_order = tonumber(a.order) or 0
+            local b_order = tonumber(b.order) or 0
+            if a_order == b_order then
+                return (a.file or "") < (b.file or "")
+            end
+            return a_order < b_order
+        end)
+
+        local files = {}
+        for _i, entry in ipairs(sorted) do
+            table.insert(files, entry.file)
+        end
+        return files
+    end
+
+    local function build_fake_chooser_from_files(files)
+        return {
+            genItemTableFromPath = function()
+                local items = {}
+                for _i, fpath in ipairs(files) do
+                    table.insert(items, { path = fpath, is_file = true })
+                end
+                return items
+            end,
+        }
+    end
+
+    local function get_visible_files_from_menu(menu)
+        if not (menu and type(menu.item_table) == "table") then return nil end
+
+        local files = {}
+        for _i, entry in ipairs(menu.item_table) do
+            if type(entry) == "table" and not entry.is_go_up then
+                local fpath = entry.file or entry.filepath or entry.path
+                if type(fpath) == "string" and fpath ~= "" then
+                    table.insert(files, fpath)
+                end
+            end
+        end
+
+        return #files > 0 and files or nil
+    end
+
     ---------------------------------------------------------------------------
     -- Hook MosaicMenuItem.update for collection gallery covers
     ---------------------------------------------------------------------------
@@ -108,10 +186,7 @@ local function apply_collections()
         if not MosaicMenuItem then return end
         _mosaic_item_patched = true
 
-        local ReadCollection  = require("readcollection")
-        local BookInfoManager = require("bookinfomanager")
-        local util            = require("util")
-        local Size            = require("ui/size")
+        local Size = require("ui/size")
 
         local Blitbuffer_uc = require("ffi/blitbuffer")
         if not MosaicMenuItem._zen_coll_focus_patched then
@@ -134,21 +209,11 @@ local function apply_collections()
             self.is_directory = true
 
             local coll_name = self.entry.name
-            local coll = ReadCollection.coll[coll_name]
-            local book_count = coll and util.tableSize(coll) or 0
+            local files = get_collection_files_in_cover_order(coll_name)
+            local book_count = #files
 
             -- Build fake chooser for collection
-            local fake_chooser = {
-                genItemTableFromPath = function()
-                    local items = {}
-                    if coll then
-                        for _, item in pairs(coll) do
-                            table.insert(items, { path = item.file, is_file = true })
-                        end
-                    end
-                    return items
-                end
-            }
+            local fake_chooser = build_fake_chooser_from_files(files)
 
             local border = Size.border.thin
             local max_w = self.width - 2 * border
@@ -211,6 +276,7 @@ local function apply_collections()
         local CenterContainer = require("ui/widget/container/centercontainer")
         local Device          = require("device")
         local Font            = require("ui/font")
+        local library_font    = require("common/library_font")
         local FrameContainer  = require("ui/widget/container/framecontainer")
         local HorizontalGroup = require("ui/widget/horizontalgroup")
         local HorizontalSpan  = require("ui/widget/horizontalspan")
@@ -225,7 +291,6 @@ local function apply_collections()
         local TextWidget      = require("ui/widget/textwidget")
         local VerticalGroup   = require("ui/widget/verticalgroup")
         local VerticalSpan    = require("ui/widget/verticalspan")
-        local util            = require("util")
 
         local Screen = Device.screen
         local scale_by_size = Screen:scaleBySize(1000000) * (1 / 1000000)
@@ -241,8 +306,8 @@ local function apply_collections()
             self.is_directory = true
 
             local coll_name  = self.entry.name
-            local coll       = ReadCollection.coll[coll_name]
-            local book_count = coll and util.tableSize(coll) or 0
+            local files = get_collection_files_in_cover_order(coll_name)
+            local book_count = #files
             local display_name = coll_name
             if coll_name == ReadCollection.default_collection_name then
                 local _ = require("gettext")
@@ -255,28 +320,22 @@ local function apply_collections()
             local cover_v_pad  = Screen:scaleBySize(4)
             local cover_zone_w = dimen_h
             local max_img      = dimen_h - 2 * border_size - 2 * cover_v_pad
-            
+
             local ratio = Cover.getRatio()
             local cover_w = math.floor(max_img * ratio)
 
             local function _fontSize(nominal, max_size)
-                local fs = math.floor(nominal * dimen_h * (1 / 64) / scale_by_size)
-                if max_size and fs >= max_size then return max_size end
+                local scale = library_font.getScale(18)
+                local fs = math.floor(nominal * dimen_h * (1 / 64) / scale_by_size * scale + 0.5)
+                if max_size then
+                    local max_scaled = math.max(1, math.floor(max_size * scale + 0.5))
+                    if fs >= max_scaled then return max_scaled end
+                end
                 return fs
             end
 
             -- Build fake chooser
-            local fake_chooser = {
-                genItemTableFromPath = function()
-                    local items = {}
-                    if coll then
-                        for _, item in pairs(coll) do
-                            table.insert(items, { path = item.file, is_file = true })
-                        end
-                    end
-                    return items
-                end
-            }
+            local fake_chooser = build_fake_chooser_from_files(files)
 
             -- Use unified makeCover
             local cover_widget, mode, scenario = Cover.makeCover(coll_name, fake_chooser, {
@@ -312,7 +371,7 @@ local function apply_collections()
             local count_str  = tostring(book_count) .. " " .. (book_count == 1 and "book" or "books")
             local wright_status = TextWidget:new{
                 text    = count_str,
-                face    = Font:getFace("cfont", fs_meta),
+                face    = library_font.getFace(fs_meta),
                 fgcolor = Blitbuffer.COLOR_GRAY_3,
                 padding = 0,
             }
@@ -324,7 +383,7 @@ local function apply_collections()
 
             local wtitle = TextBoxWidget:new{
                 text      = BD.auto(display_name),
-                face      = Font:getFace("cfont", fs_title),
+                face      = library_font.getFace(fs_title),
                 width     = main_w,
                 height    = dimen_h,
                 height_adjust = true,
@@ -437,7 +496,7 @@ local function apply_collections()
         sort_dialog = ButtonDialog:new{
             title       = _g("Sort collection by"),
             title_align = "center",
-            buttons     = sort_buttons,
+            buttons     = apply_button_group_font(sort_buttons),
         }
         UIManager_ss:show(sort_dialog)
     end
@@ -450,23 +509,15 @@ local function apply_collections()
         local ReadCollection = require("readcollection")
         local ButtonDialog   = require("ui/widget/buttondialog")
         local UIManager_cm   = require("ui/uimanager")
-        local util           = require("util")
         local _              = require("gettext")
 
         local coll_name    = item.name
         local is_favorites = coll_name == ReadCollection.default_collection_name
         local display_name = is_favorites and _("Favorites") or coll_name
-        local coll         = ReadCollection.coll[coll_name]
-        local book_count   = coll and util.tableSize(coll) or 0
+        local files        = get_collection_files_in_cover_order(coll_name)
+        local book_count   = #files
 
-        local files = {}
-        if coll then
-            local sorted = {}
-            for _, it in pairs(coll) do table.insert(sorted, it) end
-            table.sort(sorted, function(a, b) return (a.order or 0) < (b.order or 0) end)
-            for _, it in ipairs(sorted) do table.insert(files, it.file) end
-        end
-
+        local button_dialog
         local prepend_buttons = {}
         local extra_buttons = {}
         if not is_favorites then
@@ -477,6 +528,7 @@ local function apply_collections()
                     local ok_fm, FM = pcall(require, "apps/filemanager/filemanager")
                     local fm = ok_fm and FM and FM.instance
                     if fm then UIManager_cm:close(fm.file_chooser.file_dialog) end
+                    if button_dialog then UIManager_cm:close(button_dialog) end
                     fm_coll:renameCollection(item)
                 end,
             }})
@@ -488,6 +540,7 @@ local function apply_collections()
                 local ok_fm, FM = pcall(require, "apps/filemanager/filemanager")
                 local fm = ok_fm and FM and FM.instance
                 if fm then UIManager_cm:close(fm.file_chooser.file_dialog) end
+                if button_dialog then UIManager_cm:close(button_dialog) end
                 fm_coll:showCollFolderList(item)
             end,
         }})
@@ -499,6 +552,7 @@ local function apply_collections()
                     local ok_fm, FM = pcall(require, "apps/filemanager/filemanager")
                     local fm = ok_fm and FM and FM.instance
                     if fm then UIManager_cm:close(fm.file_chooser.file_dialog) end
+                    if button_dialog then UIManager_cm:close(button_dialog) end
                     fm_coll:removeCollection(item)
                 end,
             }})
@@ -517,16 +571,15 @@ local function apply_collections()
                 _zen_extra_buttons   = extra_buttons,
             })
         else
-            local button_dialog
             local buttons = {}
-            for _, row in ipairs(prepend_buttons) do table.insert(buttons, row) end
+            for _i, row in ipairs(prepend_buttons) do table.insert(buttons, row) end
             table.insert(buttons, {{
                 text     = "\u{F04BF}  " .. _("Sort") .. "  \u{25B8}",
                 align    = "left",
                 callback = function() show_coll_sort_submenu(coll_name, function() UIManager_cm:close(button_dialog) end) end,
             }})
-            for _, row in ipairs(extra_buttons) do table.insert(buttons, row) end
-            button_dialog = ButtonDialog:new{ buttons = buttons }
+            for _i, row in ipairs(extra_buttons) do table.insert(buttons, row) end
+            button_dialog = ButtonDialog:new{ buttons = apply_button_group_font(buttons) }
             UIManager_cm:show(button_dialog)
         end
         return true
@@ -541,21 +594,12 @@ local function apply_collections()
         end
 
         local ButtonDialog   = require("ui/widget/buttondialog")
-        local ReadCollection = require("readcollection")
         local UIManager_nb   = require("ui/uimanager")
-        local util           = require("util")
         local _              = require("gettext")
 
-        local coll       = ReadCollection.coll[raw_coll_name]
-        local book_count = coll and util.tableSize(coll) or 0
-
-        local files = {}
-        if coll then
-            local sorted = {}
-            for _, it in pairs(coll) do table.insert(sorted, it) end
-            table.sort(sorted, function(a, b) return (a.order or 0) < (b.order or 0) end)
-            for _, it in ipairs(sorted) do table.insert(files, it.file) end
-        end
+        local files = get_visible_files_from_menu(menu)
+            or get_collection_files_in_cover_order(raw_coll_name)
+        local book_count = #files
 
         local function reopen_collection()
             if menu then UIManager_nb:close(menu) end
@@ -598,11 +642,11 @@ local function apply_collections()
             view_dialog = ButtonDialog:new{
                 title       = _("Display mode"),
                 title_align = "center",
-                buttons     = {
+                buttons     = apply_button_group_font({
                     viewBtn(_("Mosaic"),          "\u{F00A}", "mosaic_image"),
                     viewBtn(_("List (detailed)"), "\u{F03A}", "list_image_meta"),
                     viewBtn(_("List (basic)"),    "\u{F0CA}", "list_image_filename"),
-                },
+                }),
             }
             UIManager_nb:show(view_dialog)
         end
@@ -645,7 +689,7 @@ local function apply_collections()
                     end,
                 }},
             }
-            button_dialog = ButtonDialog:new{ buttons = buttons }
+            button_dialog = ButtonDialog:new{ buttons = apply_button_group_font(buttons) }
             UIManager_nb:show(button_dialog)
         end
         return true
@@ -703,11 +747,11 @@ local function apply_collections()
             view_dialog = ButtonDialog:new{
                 title       = _("Display mode"),
                 title_align = "center",
-                buttons     = {
+                buttons     = apply_button_group_font({
                     viewBtn(_("Mosaic"),          "\u{F00A}", "mosaic_image"),
                     viewBtn(_("List (detailed)"), "\u{F03A}", "list_image_meta"),
                     viewBtn(_("List (basic)"),    "\u{F0CA}", "list_image_filename"),
-                },
+                }),
             }
             UIManager_bm:show(view_dialog)
         end
@@ -744,7 +788,7 @@ local function apply_collections()
             }},
         }
         button_dialog = ButtonDialog:new{
-            buttons = buttons,
+            buttons = apply_button_group_font(buttons),
         }
         UIManager_bm:show(button_dialog)
         return true
@@ -869,7 +913,14 @@ local function apply_collections()
                         },
                     },
                 }
-                menu.onZenNamedCollBlankHold = function()
+                menu.onZenNamedCollBlankHold = function(self_arg, arg, ges)
+                    if ges and ges.pos and menu.item_group then
+                        for _i, iw in ipairs(menu.item_group) do
+                            if iw.dimen and iw.dimen:contains(ges.pos) then
+                                return false
+                            end
+                        end
+                    end
                     return show_named_coll_blank_menu(fm_coll, menu, raw_coll_name, collection_name)
                 end
             end
@@ -933,12 +984,10 @@ local function apply_collections()
         local UIManager_mod = require("ui/uimanager")
         local Device        = require("device")
 
-        -- Lockdown mode: use native collection menu
-        local file_chooser = fm_coll.ui.file_chooser
-        local orig_showFileDialog = file_chooser.showFileDialog
-
-        local lc = zen_plugin.config and zen_plugin.config.lockdown
-        if type(lc) == "table" and lc.disable_context_menu == true then
+        local ft = zen_plugin and zen_plugin.config and zen_plugin.config.features
+        local lc = zen_plugin and zen_plugin.config and zen_plugin.config.lockdown
+        if type(ft) == "table" and ft.lockdown_mode == true
+                and type(lc) == "table" and lc.disable_context_menu == true then
             menu.onMenuHold = function() return true end
         else
             menu.onMenuHold = function(menu_self, item)
@@ -962,7 +1011,14 @@ local function apply_collections()
                     },
                 },
             }
-            menu.onZenCollBlankHold = function()
+            menu.onZenCollBlankHold = function(self_arg, arg, ges)
+                if ges and ges.pos and menu.item_group then
+                    for _i, iw in ipairs(menu.item_group) do
+                        if iw.dimen and iw.dimen:contains(ges.pos) then
+                            return false
+                        end
+                    end
+                end
                 return show_coll_blank_menu(fm_coll)
             end
         end
@@ -1048,7 +1104,14 @@ local function apply_collections()
                             },
                         },
                     }
-                    menu.onZenNamedCollBlankHold = function()
+                    menu.onZenNamedCollBlankHold = function(self_arg, arg, ges)
+                        if ges and ges.pos and menu.item_group then
+                            for _i, iw in ipairs(menu.item_group) do
+                                if iw.dimen and iw.dimen:contains(ges.pos) then
+                                    return false
+                                end
+                            end
+                        end
                         return show_named_coll_blank_menu(fm_coll, menu, raw_fav, fav_display, true)
                     end
                 end
@@ -1136,7 +1199,7 @@ local function apply_collections()
             bookinfo.findInProps = function(info, book_props, search_str, case_sensitive)
                 local fold = not case_sensitive
                 local needle = fold and util_lower(search_str) or search_str
-                for _, key in ipairs(info.props) do
+                for _i, key in ipairs(info.props) do
                     if key ~= "description" then
                         local prop = book_props[key]
                         if prop then
