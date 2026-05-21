@@ -364,11 +364,17 @@ local function apply_reader_top_status_bar()
 
             -- Cancel timer on suspend so it does not fire during sleep.
             local ReaderUI = require("apps/reader/readerui")
+            -- Shared upvalue between onSuspend and the charging hooks below.
+            local _charging_refresh_timer = nil
             local orig_onSuspend = ReaderUI.onSuspend
             ReaderUI.onSuspend = function(rui, ...)
                 if orig_onSuspend then orig_onSuspend(rui, ...) end
                 if _autoRefresh then
                     UIManager:unschedule(_autoRefresh)
+                end
+                if _charging_refresh_timer then
+                    UIManager:unschedule(_charging_refresh_timer)
+                    _charging_refresh_timer = nil
                 end
             end
             local orig_onResume = ReaderUI.onResume
@@ -379,6 +385,37 @@ local function apply_reader_top_status_bar()
                     local t = os.date("*t")
                     UIManager:scheduleIn(60 - t.sec, _autoRefresh)
                 end
+            end
+
+            -- Debounce charging events: USB negotiation fires NotCharging then
+            -- Charging within seconds; coalesce into one repaint after 1.5 s.
+            local function scheduleChargingRefresh()
+                if _charging_refresh_timer then
+                    UIManager:unschedule(_charging_refresh_timer)
+                end
+                _charging_refresh_timer = function()
+                    _charging_refresh_timer = nil
+                    if not (view.ui and view.ui.document) then return end
+                    local stack = UIManager._window_stack
+                    local top   = stack and stack[#stack]
+                    if top then
+                        local w = top.widget
+                        if w == view.ui or w == view.ui.show_parent then
+                            repaintHeader(view)
+                        end
+                    end
+                end
+                UIManager:scheduleIn(1.5, _charging_refresh_timer)
+            end
+            local orig_onCharging    = ReaderUI.onCharging
+            local orig_onNotCharging = ReaderUI.onNotCharging
+            ReaderUI.onCharging = function(rui, ...)
+                if orig_onCharging then orig_onCharging(rui, ...) end
+                scheduleChargingRefresh()
+            end
+            ReaderUI.onNotCharging = function(rui, ...)
+                if orig_onNotCharging then orig_onNotCharging(rui, ...) end
+                scheduleChargingRefresh()
             end
         end
     end

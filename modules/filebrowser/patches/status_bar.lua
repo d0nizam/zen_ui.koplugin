@@ -1069,8 +1069,43 @@ local function apply_status_bar()
 
     chainHook("onNetworkConnected")
     chainHook("onNetworkDisconnected")
-    chainHook("onCharging")
-    chainHook("onNotCharging")
+
+    -- Charging events arrive in pairs during USB negotiation (NotCharging -> Charging)
+    -- within a few seconds of each other.  A synchronous rebuild per-event causes
+    -- multiple stacked e-ink partial refreshes and makes the device feel frozen.
+    -- Debounce: coalesce all charging events into one refresh 1.5 s after the last one.
+    local _charging_refresh_timer = nil
+    local function scheduleChargingRefresh(fm)
+        if _charging_refresh_timer then
+            UIManager:unschedule(_charging_refresh_timer)
+        end
+        _charging_refresh_timer = function()
+            _charging_refresh_timer = nil
+            if FileManager.instance ~= fm then return end
+            local stack = UIManager._window_stack
+            local top = stack and stack[#stack]
+            local top_widget = top and top.widget
+            if top_widget == fm or top_widget == fm.show_parent then
+                fm:_updateStatusBar()
+            elseif top_widget and top_widget._zen_status_refresh then
+                top_widget._zen_status_refresh()
+            end
+        end
+        UIManager:scheduleIn(1.5, _charging_refresh_timer)
+    end
+
+    do
+        local function hookCharging(event_name)
+            local orig = FileManager[event_name]
+            FileManager[event_name] = function(self)
+                if orig then orig(self) end
+                if not is_enabled() then return end
+                scheduleChargingRefresh(self)
+            end
+        end
+        hookCharging("onCharging")
+        hookCharging("onNotCharging")
+    end
 
     -- Suspend: cancel the periodic timer so it does not fire during sleep.
     -- Resume: do a single refresh and restart the timer aligned to the current second.
@@ -1079,6 +1114,11 @@ local function apply_status_bar()
         if orig_onSuspend then orig_onSuspend(self) end
         if _fm_autoRefresh then
             UIManager:unschedule(_fm_autoRefresh)
+        end
+        -- Cancel any pending charging debounce so it doesn't paint into the screensaver.
+        if _charging_refresh_timer then
+            UIManager:unschedule(_charging_refresh_timer)
+            _charging_refresh_timer = nil
         end
     end
 

@@ -467,11 +467,14 @@ function CoverUtils.drawStack(covers, portrait_w, portrait_h, border, bg_fn)
     local CenterContainer = require("ui/widget/container/centercontainer")
     local FrameContainer = require("ui/widget/container/framecontainer")
     local ImageWidget = require("ui/widget/imagewidget")
+    local OverlapGroup = require("ui/widget/overlapgroup")
     local VerticalSpan = require("ui/widget/verticalspan")
 
     local stack_count = #covers
-    local bg = bg_fn and bg_fn() or coverBg()
     local dimen = { w = portrait_w + 2 * border, h = portrait_h + 2 * border }
+    -- Gray border baked into each cover's blitbuffer; survives double-inversion so
+    -- it stays gray in both day and night mode.
+    local border_color = Blitbuffer.ColorRGB32(128, 128, 128, 255)
 
     if stack_count == 0 then
         return FrameContainer:new{
@@ -479,7 +482,7 @@ function CoverUtils.drawStack(covers, portrait_w, portrait_h, border, bg_fn)
             bordersize = border,
             width = dimen.w,
             height = dimen.h,
-            background = bg,
+            background = Blitbuffer.COLOR_WHITE,
             CenterContainer:new{
                 dimen = { w = portrait_w, h = portrait_h },
                 VerticalSpan:new{ width = 1 },
@@ -488,16 +491,25 @@ function CoverUtils.drawStack(covers, portrait_w, portrait_h, border, bg_fn)
         }
     end
 
-    -- Single book: render full-size like a normal cover, no stacking.
+    -- Single book: full-size cover with gray border baked in. No baked fill needed
+    -- since the cover stretches to fill the entire portrait area.
     if stack_count == 1 then
         local cover = covers[1]
         local scaled_bb, sw, sh = CoverUtils.scaleCover(cover.data, cover.w, cover.h, portrait_w, portrait_h)
+        for x = 0, sw - 1 do
+            scaled_bb:setPixel(x, 0, border_color)
+            scaled_bb:setPixel(x, sh - 1, border_color)
+        end
+        for y = 0, sh - 1 do
+            scaled_bb:setPixel(0, y, border_color)
+            scaled_bb:setPixel(sw - 1, y, border_color)
+        end
         return FrameContainer:new{
             padding = 0,
             bordersize = border,
             width = dimen.w,
             height = dimen.h,
-            background = bg,
+            background = Blitbuffer.COLOR_WHITE,
             CenterContainer:new{
                 dimen = { w = portrait_w, h = portrait_h },
                 ImageWidget:new{
@@ -511,22 +523,9 @@ function CoverUtils.drawStack(covers, portrait_w, portrait_h, border, bg_fn)
         }
     end
 
-    -- Multi-book stack rendered into a single Blitbuffer so the entire cell
-    -- (background + covers) is repainted atomically. OverlapGroup would only
-    -- repaint the cover ImageWidgets on partial repaints (page turns), leaving
-    -- white gaps where the background should show through.
-    local final_bb = Blitbuffer.new(portrait_w, portrait_h)
-    -- The outer ImageWidget has original_in_nightmode=true (default): in night mode
-    -- it software-pre-inverts final_bb, then the screen inverts again → double inversion
-    -- = identity. Fill with the desired display color directly.
-    -- Gallery blank spaces = FrameContainer bg (COLOR_LIGHT_GRAY = 0xCC) inverted once
-    -- by the screen → 0x33. This fill is inverted twice (identity), so fill with 0x33
-    -- = COLOR_LIGHT_GRAY:invert() for an exact match.
-    local ok_dev, dev = pcall(require, "device")
-    local night = ok_dev and dev.screen and dev.screen.night_mode
-    local fill_color = night and Blitbuffer.COLOR_LIGHT_GRAY:invert() or bg
-    final_bb:fill(fill_color)
-
+    -- Multi-book stack via OverlapGroup: each ImageWidget handles night mode at
+    -- paint time, so the bg (FrameContainer white) and covers update immediately
+    -- on night mode toggle without needing a page turn.
     local book_width  = math.floor(portrait_w * 0.72)
     local book_height = math.floor(book_width * (portrait_h / portrait_w))
     local base_x = math.floor((portrait_w - book_width) / 2)
@@ -552,19 +551,27 @@ function CoverUtils.drawStack(covers, portrait_w, portrait_h, border, bg_fn)
         }
     end
 
-    -- Paint back-to-front into final_bb; inner widgets skip pre-inversion so
-    -- the outer ImageWidget handles night mode for the whole buffer uniformly.
+    -- Insert children back-to-front: index 1 = bottom layer (painted first by OverlapGroup).
+    local children = {}
     for i = n, 1, -1 do
         local cover = covers[i]
         local off = offsets[n - i + 1] or { x = 0, y = 0 }
         local scaled_bb, sw, sh = CoverUtils.scaleCover(cover.data, cover.w, cover.h, book_width, book_height)
-        local img = ImageWidget:new{
+        for x = 0, sw - 1 do
+            scaled_bb:setPixel(x, 0, border_color)
+            scaled_bb:setPixel(x, sh - 1, border_color)
+        end
+        for y = 0, sh - 1 do
+            scaled_bb:setPixel(0, y, border_color)
+            scaled_bb:setPixel(sw - 1, y, border_color)
+        end
+        table.insert(children, ImageWidget:new{
             image = scaled_bb,
+            image_disposable = true,
             width = sw,
             height = sh,
-            original_in_nightmode = false, -- outer ImageWidget handles night mode
-        }
-        img:paintTo(final_bb, base_x + off.x, base_y + off.y)
+            overlap_offset = { base_x + off.x, base_y + off.y },
+        })
     end
 
     return FrameContainer:new{
@@ -572,16 +579,13 @@ function CoverUtils.drawStack(covers, portrait_w, portrait_h, border, bg_fn)
         bordersize = border,
         width = dimen.w,
         height = dimen.h,
-        background = bg,
+        background = Blitbuffer.COLOR_WHITE,
         CenterContainer:new{
             dimen = { w = portrait_w, h = portrait_h },
-            ImageWidget:new{
-                image = final_bb,
-                image_disposable = true,
-                width = portrait_w,
-                height = portrait_h,
-                -- original_in_nightmode=true (default): pre-inverts final_bb in night mode;
-                -- combined with screen inversion → double → fill and covers appear correctly.
+            OverlapGroup:new{
+                dimen = { w = portrait_w, h = portrait_h },
+                allow_mirroring = false, -- don't flip manually-computed pixel offsets for RTL
+                table.unpack(children),
             },
         },
         overlap_align = "center",
@@ -590,15 +594,15 @@ end
 
 function CoverUtils.drawNoImage(folder_name, portrait_w, portrait_h, border)
     local CenterContainer = require("ui/widget/container/centercontainer")
-    local Device = require("device")
     local FrameContainer = require("ui/widget/container/framecontainer")
     local ImageWidget = require("ui/widget/imagewidget")
     local TextBoxWidget = require("ui/widget/textboxwidget")
 
+    -- Use constant colors; original_in_nightmode=false lets the screen's live
+    -- inversion handle night mode so the cover updates immediately on toggle.
+    local bg = Blitbuffer.COLOR_WHITE
+    local fg = Blitbuffer.COLOR_BLACK
     local final_bb = Blitbuffer.new(portrait_w, portrait_h, Blitbuffer.TYPE_BBRGB32)
-    local is_night = Device.screen and Device.screen.night_mode
-    local bg = is_night and Blitbuffer.COLOR_BLACK or Blitbuffer.COLOR_WHITE
-    local fg = is_night and Blitbuffer.COLOR_WHITE or Blitbuffer.COLOR_BLACK
     final_bb:fill(bg)
 
     local font_size = library_font.scaleValue(20)
@@ -659,8 +663,10 @@ function CoverUtils.drawNoImage(folder_name, portrait_w, portrait_h, border)
             dimen = { w = portrait_w, h = portrait_h },
             ImageWidget:new{
                 image = final_bb,
+                image_disposable = true,
                 width = portrait_w,
                 height = portrait_h,
+                original_in_nightmode = false,
             },
         },
         overlap_align = "center",
