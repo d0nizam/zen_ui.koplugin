@@ -492,15 +492,23 @@ function ZenUI:init()
         self.ui.menu:registerToMainMenu(self)
     end
 
-    -- When the background check finds a new update, reset tab_item_table on all
-    -- known menu instances so setUpdateItemTable is re-run on next menu open,
-    -- showing the update icon without requiring a restart.
-    zen_updater._on_update_found = function()
+    -- When the background check finds a new update, refresh the zen-tab icon
+    -- on every known menu instance. We update the icon in place rather than
+    -- forcing setUpdateItemTable to re-run, because KOReader's MenuSorter
+    -- mutates self.menu_items during sorting (it nils out KOMenu:menu_buttons
+    -- and every consumed leaf), so a second pass crashes in menusorter.lua at
+    -- `ipairs(menu_table["KOMenu:menu_buttons"])`. The onShowMenu patch above
+    -- also refreshes the icon, so this is just for the case where a menu
+    -- instance already exists when the background check finishes.
+    local update_icon = function()
+        local icon = zen_updater.has_update() and "zen_ui_update" or "zen_settings"
         for m_instance in pairs(_zen_menu_instances) do
-            m_instance.tab_item_table = nil
-            pcall(m_instance.setUpdateItemTable, m_instance)
+            if m_instance._zen_tab_item then
+                m_instance._zen_tab_item.icon = icon
+            end
         end
     end
+    zen_updater._on_update_found = update_icon
 
     -- Trigger background update check on fresh startup too, not only on resume.
     zen_updater.schedule_wakeup_check()
