@@ -82,6 +82,9 @@ return {
         "Bug fixes and performance improvements",
     },
     ["1.4.0"] = {
+        "Refresh visuals for update checking",
+        "Add option to disable automatic update checking",
+        "Add changelog for previous versions",
         "Add book title, author, chapter to top reader status bar",
         "Add Japanese translation",
         "Add Vietnamese translation",
