@@ -8,6 +8,16 @@ local defaults = {
         quickstart_shown_for_version = false,
         sort_defaults_applied = false,
     },
+    updater = {
+        just_updated_version = "",
+        last_update_check = 0,
+        update_available = false,
+        latest_version = "",
+        update_dl_url = "",
+        update_sha256 = "",
+        update_channel = "stable",
+        update_auto_check = true,
+    },
     localization = {
         default_locale = "en",
         locales = {
@@ -216,7 +226,21 @@ local defaults = {
             tags = "list_image_meta",
             to_be_read = "list_image_meta",
         },
+        group_reverse = {
+            authors = false,
+            series = false,
+        },
+        tags_global = {
+            collate = "title",
+            reverse = false,
+        },
         detail_collate = {
+            authors = {},
+            series = {},
+            tags = {},
+            to_be_read = {},
+        },
+        detail_reverse = {
             authors = {},
             series = {},
             tags = {},

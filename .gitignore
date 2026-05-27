@@ -6,3 +6,4 @@ ___pycache___
 .venv
 build
 .luarocks
+AGENTS.md

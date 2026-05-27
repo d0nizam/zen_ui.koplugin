@@ -5,6 +5,7 @@
 local _ = require("gettext")
 local json = require("json")
 local logger = require("logger")
+local ConfigManager = require("config/manager")
 
 local GITHUB_OWNER = "AnthonyGress"
 local GITHUB_REPO = "zen_ui.koplugin"
@@ -87,6 +88,15 @@ end
 
 local function semver_eq(a, b)
     return (not semver_gt(a, b)) and (not semver_gt(b, a))
+end
+
+local function shell_result_ok(rc, how, code)
+    if rc == true then
+        return true
+    elseif type(rc) == "number" then
+        return rc == 0
+    end
+    return rc ~= nil and how == "exit" and code == 0
 end
 
 --- Read the current plugin version from _meta.lua.
@@ -531,25 +541,36 @@ local NET_RETRY_DELAY       = 2 * 60    -- seconds to wait before retrying when 
 local NET_ERROR_BASE_DELAY  = 30         -- first retry delay (s) after API failure; doubles each retry
 local NET_ERROR_MAX_RETRIES = 2          -- max error retries: 30s, 60s
 local INSTALL_TIMEOUT       = 120        -- max seconds for download + apply
-local GS_KEY_TIME    = "zen_ui_last_update_check"
-local GS_KEY_AVAIL   = "zen_ui_update_available"
-local GS_KEY_VER     = "zen_ui_latest_version"
-local GS_KEY_URL     = "zen_ui_update_dl_url"
-local GS_KEY_SHA     = "zen_ui_update_sha256"
-local GS_KEY_CHANNEL = "zen_ui_update_channel"
-local GS_KEY_AUTO    = "zen_ui_update_auto_check"
+local UP_KEY_JUST_UPDATED = "just_updated_version"
+local UP_KEY_TIME         = "last_update_check"
+local UP_KEY_AVAIL        = "update_available"
+local UP_KEY_VER          = "latest_version"
+local UP_KEY_URL          = "update_dl_url"
+local UP_KEY_SHA          = "update_sha256"
+local UP_KEY_CHANNEL      = "update_channel"
+local UP_KEY_AUTO         = "update_auto_check"
 
---- Load or write persisted update state via G_reader_settings.
-local function get_gs()
-    local ok, gs = pcall(function() return G_reader_settings end)
-    return (ok and gs) or nil
+local function load_updater_config()
+    local ok, cfg = pcall(ConfigManager.load)
+    if not ok or type(cfg) ~= "table" then
+        return nil, nil
+    end
+    if type(cfg.updater) ~= "table" then
+        cfg.updater = {}
+    end
+    return cfg, cfg.updater
+end
+
+local function save_updater_config(cfg)
+    if type(cfg) ~= "table" then return end
+    pcall(ConfigManager.save, cfg)
 end
 
 --- Returns true when the 24h check interval has elapsed since the last check.
 local function is_check_due()
-    local gs  = get_gs()
+    local _cfg, updater = load_updater_config()
     local now = os.time()
-    local last = gs and gs:readSetting(GS_KEY_TIME) or 0
+    local last = updater and updater[UP_KEY_TIME] or 0
     local last_num = type(last) == "number" and last or 0
     local delta = now - last_num
     local due = delta >= CHECK_INTERVAL
@@ -558,29 +579,27 @@ local function is_check_due()
 end
 
 local function get_channel()
-    local gs = get_gs()
-    if gs then
-        local ch = gs:readSetting(GS_KEY_CHANNEL)
-        if ch == "beta" then return "beta" end
-    end
+    local _cfg, updater = load_updater_config()
+    local ch = updater and updater[UP_KEY_CHANNEL]
+    if ch == "beta" then return "beta" end
     return "stable"
 end
 
 local function is_auto_check_enabled()
-    local gs = get_gs()
-    if not gs then return true end
-    return gs:readSetting(GS_KEY_AUTO) ~= false
+    local _cfg, updater = load_updater_config()
+    if not updater then return true end
+    return updater[UP_KEY_AUTO] ~= false
 end
 
 local function persist_state(now)
-    local gs = get_gs()
-    if not gs then return end
-    gs:saveSetting(GS_KEY_TIME,  now)
-    gs:saveSetting(GS_KEY_AVAIL, M._has_update)
-    gs:saveSetting(GS_KEY_VER,   M._latest_ver or "")
-    gs:saveSetting(GS_KEY_URL,   M._dl_url or "")
-    gs:saveSetting(GS_KEY_SHA,   M._latest_sha256 or "")
-    pcall(gs.flush, gs)
+    local cfg, updater = load_updater_config()
+    if not updater then return end
+    updater[UP_KEY_TIME]  = now
+    updater[UP_KEY_AVAIL] = M._has_update == true
+    updater[UP_KEY_VER]   = M._latest_ver or ""
+    updater[UP_KEY_URL]   = M._dl_url or ""
+    updater[UP_KEY_SHA]   = M._latest_sha256 or ""
+    save_updater_config(cfg)
 end
 
 --- Clear all persisted update state (called after a successful install).
@@ -591,26 +610,25 @@ local function clear_update_state()
     M._latest_sha256 = nil
     M._latest_notes = nil
     M._last_error = nil
-    local gs = get_gs()
-    if gs then
-        gs:saveSetting(GS_KEY_AVAIL, false)
-        gs:saveSetting(GS_KEY_VER,   "")
-        gs:saveSetting(GS_KEY_URL,   "")
-        gs:saveSetting(GS_KEY_SHA,   "")
-        pcall(gs.flush, gs)
-    end
+    local cfg, updater = load_updater_config()
+    if not updater then return end
+    updater[UP_KEY_AVAIL] = false
+    updater[UP_KEY_VER] = ""
+    updater[UP_KEY_URL] = ""
+    updater[UP_KEY_SHA] = ""
+    save_updater_config(cfg)
 end
 
 local function load_cached_state()
-    local gs = get_gs()
-    if not gs then return end
-    M._has_update = gs:readSetting(GS_KEY_AVAIL) == true
-    local sha = gs:readSetting(GS_KEY_SHA)
+    local _cfg, updater = load_updater_config()
+    if not updater then return end
+    M._has_update = updater[UP_KEY_AVAIL] == true
+    local sha = updater[UP_KEY_SHA]
     M._latest_sha256 = is_valid_sha256_digest(sha) and sha:lower() or nil
     M._latest_notes = nil
-    local ver = gs:readSetting(GS_KEY_VER)
+    local ver = updater[UP_KEY_VER]
     M._latest_ver = (type(ver) == "string" and ver ~= "") and ver or nil
-    local url = gs:readSetting(GS_KEY_URL)
+    local url = updater[UP_KEY_URL]
     -- Reject stale zipball/tarball URLs from before the asset-only fix.
     M._dl_url = is_valid_asset_url(url) and url or nil
     if not M._dl_url then
@@ -916,7 +934,7 @@ function M.schedule_wakeup_check()
     logger.info("ZenUpdater: wakeup check scheduled in ", NET_SETTLE_DELAY, "s")
 end
 
---- Check for updates at most once every 24 h (throttled via G_reader_settings).
+--- Check for updates at most once every 24 h (throttled via zen_ui_config).
 --- Returns "ok" (live check succeeded), "error" (network failure), or "cached" (throttled).
 function M.check_for_update()
     if M._checked then
@@ -925,9 +943,9 @@ function M.check_for_update()
     end
     M._checked = true
 
-    local gs  = get_gs()
+    local _cfg, updater = load_updater_config()
     local now = os.time()
-    local last = gs and gs:readSetting(GS_KEY_TIME) or 0
+    local last = updater and updater[UP_KEY_TIME] or 0
     logger.dbg("ZenUpdater: check_for_update now=", now, "last=", last, "interval=", CHECK_INTERVAL)
 
     if type(last) == "number" and (now - last) < CHECK_INTERVAL then
@@ -961,14 +979,7 @@ end
 local function run_shell_ok(cmd, label)
     logger.dbg("ZenUpdater: shell start", label or "", cmd)
     local rc, how, code = os.execute(cmd)
-    local ok
-    if rc == true then
-        ok = true
-    elseif type(rc) == "number" then
-        ok = rc == 0
-    else
-        ok = rc ~= nil and how == "exit" and code == 0
-    end
+    local ok = shell_result_ok(rc, how, code)
     logger.dbg("ZenUpdater: shell done", label or "", "ok=", tostring(ok), "rc=", tostring(rc), "how=", tostring(how), "code=", tostring(code))
     return ok
 end
@@ -983,6 +994,61 @@ end
 
 local function path_is_readable_file(path)
     return run_shell_ok(string.format("test -r %q", path))
+end
+
+local function get_file_size_bytes(path)
+    local f = io.open(path, "rb")
+    if not f then return nil end
+    local size = tonumber(f:seek("end"))
+    f:close()
+    return size
+end
+
+local function run_shell_capture_lines(cmd, label, max_lines)
+    logger.dbg("ZenUpdater: shell capture start", label or "", cmd)
+    local pipe = io.popen(cmd)
+    if not pipe then
+        logger.warn("ZenUpdater: shell capture popen failed label=", label or "")
+        return false, {}
+    end
+
+    local limit = tonumber(max_lines) or 20
+    local total_lines = 0
+    local lines = {}
+    for raw in pipe:lines() do
+        local line = (raw or ""):gsub("\r", "")
+        if line ~= "" then
+            total_lines = total_lines + 1
+            if #lines < limit then
+                lines[#lines + 1] = line
+            end
+        end
+    end
+
+    local close_ok, rc, how, code = pcall(pipe.close, pipe)
+    if not close_ok then
+        logger.warn("ZenUpdater: shell capture close failed label=", label or "")
+        return false, lines
+    end
+
+    local ok = shell_result_ok(rc, how, code)
+    logger.dbg(
+        "ZenUpdater: shell capture done",
+        label or "",
+        "ok=",
+        tostring(ok),
+        "rc=",
+        tostring(rc),
+        "how=",
+        tostring(how),
+        "code=",
+        tostring(code),
+        "line_count=",
+        total_lines,
+        "stored_lines=",
+        #lines
+    )
+    return ok, lines
 end
 
 local function collect_zip_entries_with_command(cmd, label)
@@ -1001,13 +1067,31 @@ local function collect_zip_entries_with_command(cmd, label)
         end
     end
 
-    local close_ok = pcall(pipe.close, pipe)
+    local close_ok, rc, how, code = pcall(pipe.close, pipe)
     if not close_ok then
         logger.warn("ZenUpdater: zip list close failed method=", label)
         return nil
     end
+    local ok = shell_result_ok(rc, how, code)
 
-    logger.dbg("ZenUpdater: zip list done method=", label, "entry_count=", #entries)
+    logger.dbg(
+        "ZenUpdater: zip list done method=",
+        label,
+        "entry_count=",
+        #entries,
+        "ok=",
+        tostring(ok),
+        "rc=",
+        tostring(rc),
+        "how=",
+        tostring(how),
+        "code=",
+        tostring(code)
+    )
+    if not ok then
+        logger.warn("ZenUpdater: zip list command returned non-zero method=", label)
+        return nil
+    end
     if #entries == 0 then
         return nil
     end
@@ -1036,6 +1120,53 @@ local function collect_zip_entries(zip_path)
         return nil
     end
     return parsed
+end
+
+local function check_zip_integrity(zip_path)
+    logger.dbg(
+        "ZenUpdater: check_zip_integrity zip_path=",
+        zip_path,
+        "exists=",
+        tostring(path_exists(zip_path)),
+        "size_bytes=",
+        tostring(get_file_size_bytes(zip_path))
+    )
+
+    if run_shell_ok(string.format("unzip -t %q >/dev/null 2>&1", zip_path), "zip_integrity") then
+        logger.dbg("ZenUpdater: zip integrity unzip -t passed")
+        return true
+    end
+
+    local _ok, test_lines = run_shell_capture_lines(
+        string.format("unzip -t %q 2>&1", zip_path),
+        "zip_integrity_fail_output",
+        16
+    )
+    if #test_lines > 0 then
+        logger.warn("ZenUpdater: unzip -t output:\n" .. table.concat(test_lines, "\n"))
+    else
+        logger.warn("ZenUpdater: unzip -t produced no diagnostic output")
+    end
+
+    logger.warn("ZenUpdater: unzip -t failed, falling back to zip listing validation")
+    local entries = collect_zip_entries(zip_path)
+    if entries and #entries > 0 then
+        local sample = {}
+        for _i, entry in ipairs(entries) do
+            if #sample >= 8 then break end
+            sample[#sample + 1] = entry
+        end
+        logger.dbg(
+            "ZenUpdater: zip integrity fallback accepted entry_count=",
+            #entries,
+            "sample=",
+            table.concat(sample, " | ")
+        )
+        return true
+    end
+
+    logger.warn("ZenUpdater: zip integrity fallback failed to parse entries")
+    return false
 end
 
 local function validate_zip_layout(zip_path, plugin_name)
@@ -1250,6 +1381,15 @@ local function _do_install(screen, plugin_root, plugins_dir)
             return
         end
 
+        logger.dbg(
+            "ZenUpdater: download artifact ready zip=",
+            zip_path,
+            "exists=",
+            tostring(path_exists(zip_path)),
+            "size_bytes=",
+            tostring(get_file_size_bytes(zip_path))
+        )
+
         -- Preflight checks before touching the active plugin folder.
         logger.dbg("ZenUpdater: preflight start")
         if not prepare_plugins_dir_writable(plugins_dir) then
@@ -1258,7 +1398,7 @@ local function _do_install(screen, plugin_root, plugins_dir)
             return
         end
 
-        if not run_shell_ok(string.format("unzip -t %q >/dev/null 2>&1", zip_path), "zip_integrity") then
+        if not check_zip_integrity(zip_path) then
             os.remove(zip_path)
             fail_with(_("Update failed: corrupted update package."))
             return
@@ -1271,6 +1411,7 @@ local function _do_install(screen, plugin_root, plugins_dir)
             fail_with(_("Update failed: invalid package layout."))
             return
         end
+        logger.dbg("ZenUpdater: preflight checks passed")
 
         screen:update{ subtitle = _("Installing") .. "...", button = false }
         UIManager:forceRePaint()
@@ -1297,6 +1438,16 @@ local function _do_install(screen, plugin_root, plugins_dir)
         end
 
         if not run_shell_ok(string.format("unzip -q %q -d %q", zip_path, stage_parent), "unzip_to_stage") then
+            local _ok_unpack, unpack_lines = run_shell_capture_lines(
+                string.format("unzip %q -d %q 2>&1", zip_path, stage_parent),
+                "unzip_to_stage_fail_output",
+                20
+            )
+            if #unpack_lines > 0 then
+                logger.warn("ZenUpdater: unzip_to_stage output:\n" .. table.concat(unpack_lines, "\n"))
+            else
+                logger.warn("ZenUpdater: unzip_to_stage produced no diagnostic output")
+            end
             safe_remove_tree(stage_parent)
             os.remove(zip_path)
             fail_with(_("Update failed: could not unpack update package."))
@@ -1359,11 +1510,12 @@ local function _do_install(screen, plugin_root, plugins_dir)
         os.remove(zip_path)
         logger.info("ZenUpdater: install transaction completed successfully")
 
+        local installed_version = M._latest_ver or ""
         clear_update_state()
-        local gs2 = get_gs()
-        if gs2 then
-            gs2:saveSetting("zen_ui_just_updated", M._latest_ver or "")
-            pcall(gs2.flush, gs2)
+        local cfg2, updater2 = load_updater_config()
+        if updater2 then
+            updater2[UP_KEY_JUST_UPDATED] = installed_version
+            save_updater_config(cfg2)
         end
 
         screen:update{ subtitle = _("Rebooting") .. "...", button = false }
@@ -1469,10 +1621,10 @@ function M.build_update_now_item(plugin)
             M._dl_url     = nil
             M._latest_sha256 = nil
             M._latest_notes = nil
-            local gs = get_gs()
-            if gs then
-                gs:saveSetting(GS_KEY_TIME, 0)
-                pcall(gs.flush, gs)
+            local cfg, updater = load_updater_config()
+            if updater then
+                updater[UP_KEY_TIME] = 0
+                save_updater_config(cfg)
             end
 
             local function run_check()
@@ -1645,11 +1797,11 @@ end
 
 --- Enable or disable automatic background update checks.
 function M.set_auto_check_enabled(enabled)
-    local gs = get_gs()
-    if not gs then return end
+    local cfg, updater = load_updater_config()
+    if not updater then return end
     local on = enabled ~= false
-    gs:saveSetting(GS_KEY_AUTO, on)
-    pcall(gs.flush, gs)
+    updater[UP_KEY_AUTO] = on
+    save_updater_config(cfg)
     if on then
         M.schedule_wakeup_check()
     else
@@ -1659,10 +1811,9 @@ end
 
 --- Set the update channel and reset cached state so the next check uses it.
 function M.set_channel(ch)
-    local gs = get_gs()
-    if not gs then return end
-    gs:saveSetting(GS_KEY_CHANNEL, ch == "beta" and "beta" or "stable")
-    pcall(gs.flush, gs)
+    local cfg, updater = load_updater_config()
+    if not updater then return end
+    updater[UP_KEY_CHANNEL] = ch == "beta" and "beta" or "stable"
     -- Invalidate cache so next check_for_update() goes to the network.
     M._checked    = false
     M._has_update = false
@@ -1670,8 +1821,8 @@ function M.set_channel(ch)
     M._dl_url     = nil
     M._latest_sha256 = nil
     M._latest_notes = nil
-    gs:saveSetting(GS_KEY_TIME, 0)
-    pcall(gs.flush, gs)
+    updater[UP_KEY_TIME] = 0
+    save_updater_config(cfg)
 end
 
 --- Returns a radio-style "Update channel" sub-menu item for the About section.

@@ -252,14 +252,15 @@ function ZenUI:init()
 
         local current_ver = get_plugin_version()
         local shown_ver   = self.config._meta.quickstart_shown_for_version
+        local updater_cfg = (type(self.config.updater) == "table") and self.config.updater or nil
 
         -- One-shot flag written by zen_updater before restart; takes priority
         -- over version comparison (handles pre-quickstart installs too).
-        local just_updated_ver = G_reader_settings:readSetting("zen_ui_just_updated")
+        local just_updated_ver = updater_cfg and updater_cfg.just_updated_version or ""
         local from_updater = type(just_updated_ver) == "string" and just_updated_ver ~= ""
         if from_updater then
-            G_reader_settings:delSetting("zen_ui_just_updated")
-            pcall(G_reader_settings.flush, G_reader_settings)
+            self.config.updater.just_updated_version = ""
+            self:saveConfig()
         end
 
         local pages_to_show
@@ -267,7 +268,8 @@ function ZenUI:init()
         local is_update = from_updater
             or (type(shown_ver) == "string" and shown_ver ~= current_ver)
 
-        local update_channel = G_reader_settings:readSetting("zen_ui_update_channel") or "stable"
+        local update_channel = (type(self.config.updater) == "table"
+            and self.config.updater.update_channel) or "stable"
         logger.info("ZenUI quickstart check: current_ver=", current_ver,
             "shown_ver=", tostring(shown_ver),
             "just_updated_ver=", tostring(just_updated_ver),
@@ -531,6 +533,28 @@ end
 
 function ZenUI:onCloseWidget()
     i18n.uninstall()
+end
+
+-- KOReader PluginLoader calls this only when the user explicitly chooses
+-- the "delete plugin settings" action during disable/uninstall.
+function ZenUI:deletePluginSettings()
+    zen_updater.cancel_wakeup_check()
+    zen_updater._on_update_found = nil
+
+    local gs = rawget(_G, "G_reader_settings")
+    if not gs or type(gs.delSetting) ~= "function" then
+        return true
+    end
+
+    local function remove_key(key_name)
+        if type(key_name) ~= "string" or key_name == "" then return end
+        pcall(gs.delSetting, gs, key_name)
+    end
+
+    remove_key(ConfigManager.key())
+    pcall(gs.flush, gs)
+    logger.info("ZenUI: deletePluginSettings completed")
+    return true
 end
 
 return ZenUI
