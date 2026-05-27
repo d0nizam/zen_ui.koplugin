@@ -568,7 +568,7 @@ end
 
 --- Returns true when the 24h check interval has elapsed since the last check.
 local function is_check_due()
-    local _cfg, updater = load_updater_config()
+    local updater = select(2, load_updater_config())
     local now = os.time()
     local last = updater and updater[UP_KEY_TIME] or 0
     local last_num = type(last) == "number" and last or 0
@@ -579,14 +579,14 @@ local function is_check_due()
 end
 
 local function get_channel()
-    local _cfg, updater = load_updater_config()
+    local updater = select(2, load_updater_config())
     local ch = updater and updater[UP_KEY_CHANNEL]
     if ch == "beta" then return "beta" end
     return "stable"
 end
 
 local function is_auto_check_enabled()
-    local _cfg, updater = load_updater_config()
+    local updater = select(2, load_updater_config())
     if not updater then return true end
     return updater[UP_KEY_AUTO] ~= false
 end
@@ -620,7 +620,7 @@ local function clear_update_state()
 end
 
 local function load_cached_state()
-    local _cfg, updater = load_updater_config()
+    local updater = select(2, load_updater_config())
     if not updater then return end
     M._has_update = updater[UP_KEY_AVAIL] == true
     local sha = updater[UP_KEY_SHA]
@@ -943,7 +943,7 @@ function M.check_for_update()
     end
     M._checked = true
 
-    local _cfg, updater = load_updater_config()
+    local updater = select(2, load_updater_config())
     local now = os.time()
     local last = updater and updater[UP_KEY_TIME] or 0
     logger.dbg("ZenUpdater: check_for_update now=", now, "last=", last, "interval=", CHECK_INTERVAL)
@@ -1137,11 +1137,11 @@ local function check_zip_integrity(zip_path)
         return true
     end
 
-    local _ok, test_lines = run_shell_capture_lines(
+    local test_lines = select(2, run_shell_capture_lines(
         string.format("unzip -t %q 2>&1", zip_path),
         "zip_integrity_fail_output",
         16
-    )
+    ))
     if #test_lines > 0 then
         logger.warn("ZenUpdater: unzip -t output:\n" .. table.concat(test_lines, "\n"))
     else
@@ -1438,11 +1438,11 @@ local function _do_install(screen, plugin_root, plugins_dir)
         end
 
         if not run_shell_ok(string.format("unzip -q %q -d %q", zip_path, stage_parent), "unzip_to_stage") then
-            local _ok_unpack, unpack_lines = run_shell_capture_lines(
+            local unpack_lines = select(2, run_shell_capture_lines(
                 string.format("unzip %q -d %q 2>&1", zip_path, stage_parent),
                 "unzip_to_stage_fail_output",
                 20
-            )
+            ))
             if #unpack_lines > 0 then
                 logger.warn("ZenUpdater: unzip_to_stage output:\n" .. table.concat(unpack_lines, "\n"))
             else
