@@ -443,15 +443,12 @@ local function apply_status_bar()
 
         -- Detect whether we are inside a subfolder of, or at, the home directory
         local in_subfolder = false
-        local at_home = false
         local folder_name = nil
         local g_settings = rawget(_G, "G_reader_settings")
         local home_dir = paths.getHomeDir()
         if home_dir and path then
             local norm_path = paths.normPath(path:gsub("/$", ""))
-            if norm_path == home_dir then
-                at_home = true
-            elseif norm_path:sub(1, #home_dir + 1) == home_dir .. "/" then
+            if norm_path ~= home_dir and norm_path:sub(1, #home_dir + 1) == home_dir .. "/" then
                 in_subfolder = true
                 folder_name = path:match("([^/]+)/?$") or path
             end
@@ -541,7 +538,7 @@ local function apply_status_bar()
         local center_max_w = math.max(0, half_avail * 2)
 
         -- Center: nav_title override > folder name when in subfolder > configured center items
-        local center_content = nil
+        local center_content
         if nav_title then
             center_content = fitTextWidget(nav_title, center_max_w)
         elseif in_subfolder and folder_name then

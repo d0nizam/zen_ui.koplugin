@@ -36,7 +36,6 @@ local function disable_autowarmth()
     G_reader_settings:saveSetting("plugins_disabled", disabled_list)
     G_reader_settings:flush()
     UIManager:scheduleIn(0.5, function()
-        local ConfirmBox = require("ui/widget/confirmbox")
         local Event = require("ui/event")
         UIManager:show(ConfirmBox:new{
             text         = _("Incompatible plugins have been disabled:") .. "\nAuto warmth and night mode",
@@ -353,7 +352,7 @@ function M.build(ctx)
                 end,
                 callback = function()
                     config.features.night_mode_schedule =
-                        not (config.features.night_mode_schedule == true)
+                        config.features.night_mode_schedule ~= true
                     plugin:saveConfig()
                     trigger_night_schedule_reschedule()
                     if config.features.night_mode_schedule then
@@ -425,7 +424,7 @@ function M.build(ctx)
                 end,
                 callback = function()
                     config.features.brightness_schedule =
-                        not (config.features.brightness_schedule == true)
+                        config.features.brightness_schedule ~= true
                     plugin:saveConfig()
                     trigger_brightness_schedule_reschedule()
                     if config.features.brightness_schedule then
@@ -541,7 +540,7 @@ function M.build(ctx)
                     return config.features.warmth_schedule == true
                 end,
                 callback = function()
-                    config.features.warmth_schedule = not (config.features.warmth_schedule == true)
+                    config.features.warmth_schedule = config.features.warmth_schedule ~= true
                     plugin:saveConfig()
                     trigger_warmth_schedule_reschedule()
                     if config.features.warmth_schedule then

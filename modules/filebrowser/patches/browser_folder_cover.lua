@@ -10,7 +10,6 @@ local function apply_browser_folder_cover()
     local CenterContainer = require("ui/widget/container/centercontainer")
     local Device = require("device")
     local FileChooser = require("ui/widget/filechooser")
-    local Font = require("ui/font")
     local FrameContainer = require("ui/widget/container/framecontainer")
     local HorizontalGroup = require("ui/widget/horizontalgroup")
     local HorizontalSpan = require("ui/widget/horizontalspan")
@@ -18,7 +17,6 @@ local function apply_browser_folder_cover()
     local LeftContainer = require("ui/widget/container/leftcontainer")
     local LineWidget = require("ui/widget/linewidget")
     local OverlapGroup = require("ui/widget/overlapgroup")
-    local RenderText = require("ui/rendertext")
     local RightContainer = require("ui/widget/container/rightcontainer")
     local Size = require("ui/size")
     local TextBoxWidget = require("ui/widget/textboxwidget")
@@ -27,11 +25,9 @@ local function apply_browser_folder_cover()
     local VerticalGroup = require("ui/widget/verticalgroup")
     local VerticalSpan = require("ui/widget/verticalspan")
     local lfs = require("libs/libkoreader-lfs")
-    local util = require("util")
     local paths = require("common/paths")
     local library_font = require("common/library_font")
     local utils = require("common/utils")
-    local IconWidget = require("ui/widget/iconwidget")
 
     local _ = require("gettext")
     local Screen = Device.screen
@@ -39,8 +35,8 @@ local function apply_browser_folder_cover()
     local function getMenuItem(menu, ...)
         local function findItem(sub_items, texts)
             local find = {}
-            local texts = type(texts) == "table" and texts or { texts }
-            for _, text in ipairs(texts) do find[text] = true end
+            local text_list = type(texts) == "table" and texts or { texts }
+            for _, text in ipairs(text_list) do find[text] = true end
             for _, item in ipairs(sub_items) do
                 local text = item.text or (item.text_func and item.text_func())
                 if text and find[text] then return item end
@@ -257,12 +253,6 @@ local function apply_browser_folder_cover()
 
     local function placeholderBg()
         return Blitbuffer.COLOR_LIGHT_GRAY
-    end
-
-    local function getCornerRadius()
-        local cfg = _plugin and _plugin.config
-        local r = cfg and cfg.corner_radius or 12
-        return Screen:scaleBySize(r)
     end
 
     local function patchCoverBrowser(plugin)
@@ -492,7 +482,7 @@ local function apply_browser_folder_cover()
         end
 
         -- Settings
-        function BooleanSetting(text, name, default)
+        local function BooleanSetting(text, name, default)
             local self = { text = text }
             self.get = function()
                 if not BookInfoManager then return default and false or nil end
@@ -811,7 +801,7 @@ local function apply_browser_folder_cover()
             local folder_name = dir_path:match("([^/]+)/?$") or dir_path
             folder_name = BD.directory(folder_name)
 
-            local cover_widget, mode, scenario = Cover.makeCover(dir_path, _chooser, {
+            local cover_widget = Cover.makeCover(dir_path, _chooser, {
                 is_folder = true,
                 max_w = max_w,
                 max_h = bh,
@@ -1111,7 +1101,7 @@ local function apply_browser_folder_cover()
                     local ratio = Cover.getRatio()
                     local cover_w = math.floor(max_img * ratio)
 
-                    local cover_widget, mode, scenario = Cover.makeCover(dir_path, _chooser, {
+                    local cover_widget = Cover.makeCover(dir_path, _chooser, {
                         is_folder = true,
                         max_w = cover_w + 2 * border_size,
                         max_h = max_img + 2 * border_size,

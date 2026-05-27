@@ -199,7 +199,7 @@ function M.build(ctx)
                 text = _("Show bottom border"),
                 checked_func = function() return config.status_bar.show_bottom_border == true end,
                 callback = function()
-                    config.status_bar.show_bottom_border = not (config.status_bar.show_bottom_border == true)
+                    config.status_bar.show_bottom_border = config.status_bar.show_bottom_border ~= true
                     save_and_apply_status_bar()
                 end,
             },
@@ -207,7 +207,7 @@ function M.build(ctx)
                 text = _("Bold text"),
                 checked_func = function() return config.status_bar.bold_text == true end,
                 callback = function()
-                    config.status_bar.bold_text = not (config.status_bar.bold_text == true)
+                    config.status_bar.bold_text = config.status_bar.bold_text ~= true
                     save_and_apply_status_bar()
                 end,
             },
@@ -215,7 +215,7 @@ function M.build(ctx)
                 text = _("Colored status icons"),
                 checked_func = function() return config.status_bar.colored == true end,
                 callback = function()
-                    config.status_bar.colored = not (config.status_bar.colored == true)
+                    config.status_bar.colored = config.status_bar.colored ~= true
                     save_and_apply_status_bar()
                 end,
             },

@@ -121,14 +121,14 @@ function M.registerPluginIcons(icons_dir, icons, copy_to_user_dir)
             pcall(function()
                 local DataStorage = require("datastorage")
                 local ffiutil = require("ffi/util")
-                local user_icons_dir = DataStorage:getDataDir() .. "/icons"
-                if lfs.attributes(user_icons_dir, "mode") ~= "directory" then
-                    lfs.mkdir(user_icons_dir)
+                local dest_icons_dir = DataStorage:getDataDir() .. "/icons"
+                if lfs.attributes(dest_icons_dir, "mode") ~= "directory" then
+                    lfs.mkdir(dest_icons_dir)
                 end
                 for name, filename in pairs(icons) do
                     -- Use icon short-name as dest so ICONS_DIRS lookup finds it by name
                     local ext = filename:match("%.[^%.]+$") or ".svg"
-                    local dst = user_icons_dir .. "/" .. name .. ext
+                    local dst = dest_icons_dir .. "/" .. name .. ext
                     if lfs.attributes(dst, "mode") ~= "file" then
                         local src = icons_dir .. filename
                         if lfs.attributes(src, "mode") == "file" then

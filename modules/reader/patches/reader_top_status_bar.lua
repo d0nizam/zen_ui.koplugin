@@ -39,6 +39,19 @@ local function apply_reader_top_status_bar()
         return type(features) == "table" and features.reader_top_status_bar == true
     end
 
+    local function is_view_active_top(view)
+        if not (view and view.ui) then return false end
+        local stack = UIManager._window_stack
+        local top = stack and stack[#stack]
+        local top_widget = top and top.widget
+        if not top_widget then return false end
+        if top_widget == view.ui or top_widget == view.ui.show_parent then
+            return true
+        end
+        local parent = top_widget.show_parent
+        return parent == view.ui or parent == view.ui.show_parent
+    end
+
     -- Stable reference so suspend/resume can cancel/restart the timer.
     local _autoRefresh
 
@@ -364,12 +377,9 @@ local function apply_reader_top_status_bar()
         if not is_enabled() then return end
         if self.render_mode ~= nil then return end -- pdf-like; skip
         if not self.document then return end
-        -- Guard: don't paint when reader is not the topmost widget.
-        local _stack = UIManager._window_stack
-        if not _stack then return end
-        local _top = _stack[#_stack]
-        local _w = _top and _top.widget
-        if _w ~= self.ui and _w ~= (self.ui and self.ui.show_parent) then
+        -- Guard: don't paint when reader is not active (allow overlays that
+        -- belong to this ReaderUI via show_parent, e.g., AutoDim on resume).
+        if not is_view_active_top(self) then
             return
         end
 
@@ -399,13 +409,8 @@ local function apply_reader_top_status_bar()
                     _autoRefresh = nil
                     return
                 end
-                local stack = UIManager._window_stack
-                local top   = stack and stack[#stack]
-                if top then
-                    local w = top.widget
-                    if w == view.ui or w == view.ui.show_parent then
-                        repaintHeader(view)
-                    end
+                if is_view_active_top(view) then
+                    repaintHeader(view)
                 end
                 local t = os.date("*t")
                 UIManager:scheduleIn(60 - t.sec, _autoRefreshFn)
@@ -418,6 +423,8 @@ local function apply_reader_top_status_bar()
             local ReaderUI = require("apps/reader/readerui")
             -- Shared upvalue between onSuspend and the charging hooks below.
             local _charging_refresh_timer = nil
+            local _resume_refresh_timer_1 = nil
+            local _resume_refresh_timer_2 = nil
             local orig_onSuspend = ReaderUI.onSuspend
             ReaderUI.onSuspend = function(rui, ...)
                 if orig_onSuspend then orig_onSuspend(rui, ...) end
@@ -427,6 +434,14 @@ local function apply_reader_top_status_bar()
                 if _charging_refresh_timer then
                     UIManager:unschedule(_charging_refresh_timer)
                     _charging_refresh_timer = nil
+                end
+                if _resume_refresh_timer_1 then
+                    UIManager:unschedule(_resume_refresh_timer_1)
+                    _resume_refresh_timer_1 = nil
+                end
+                if _resume_refresh_timer_2 then
+                    UIManager:unschedule(_resume_refresh_timer_2)
+                    _resume_refresh_timer_2 = nil
                 end
             end
             local orig_onResume = ReaderUI.onResume
@@ -440,8 +455,26 @@ local function apply_reader_top_status_bar()
                     -- Repaint immediately so header is visible on wakeup
                     -- without waiting for the next minute tick or page turn.
                     repaintHeader(view)
-                    local t = os.date("*t")
-                    UIManager:scheduleIn(60 - t.sec, _autoRefresh)
+                    -- Retry after wake overlays settle; first repaint can race
+                    -- with screensaver/AutoDim transitions.
+                    if _resume_refresh_timer_1 then UIManager:unschedule(_resume_refresh_timer_1) end
+                    if _resume_refresh_timer_2 then UIManager:unschedule(_resume_refresh_timer_2) end
+                    _resume_refresh_timer_1 = function()
+                        _resume_refresh_timer_1 = nil
+                        if is_view_active_top(view) then
+                            repaintHeader(view)
+                        end
+                    end
+                    _resume_refresh_timer_2 = function()
+                        _resume_refresh_timer_2 = nil
+                        if is_view_active_top(view) then
+                            repaintHeader(view)
+                        end
+                    end
+                    UIManager:scheduleIn(0.6, _resume_refresh_timer_1)
+                    UIManager:scheduleIn(1.8, _resume_refresh_timer_2)
+                    local now_t = os.date("*t")
+                    UIManager:scheduleIn(60 - now_t.sec, _autoRefresh)
                 end
             end
 
@@ -454,13 +487,8 @@ local function apply_reader_top_status_bar()
                 _charging_refresh_timer = function()
                     _charging_refresh_timer = nil
                     if not (view.ui and view.ui.document) then return end
-                    local stack = UIManager._window_stack
-                    local top   = stack and stack[#stack]
-                    if top then
-                        local w = top.widget
-                        if w == view.ui or w == view.ui.show_parent then
-                            repaintHeader(view)
-                        end
+                    if is_view_active_top(view) then
+                        repaintHeader(view)
                     end
                 end
                 UIManager:scheduleIn(1.5, _charging_refresh_timer)

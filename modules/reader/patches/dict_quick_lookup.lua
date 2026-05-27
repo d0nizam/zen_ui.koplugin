@@ -11,6 +11,7 @@ local function apply()
     local Event = require("ui/event")
     local UIManager = require("ui/uimanager")
     local logger = require("logger")
+    local _ = require("gettext")
 
     local _plugin_ref = rawget(_G, "__ZEN_UI_PLUGIN")
 

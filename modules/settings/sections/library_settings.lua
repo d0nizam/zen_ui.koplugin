@@ -140,7 +140,7 @@ function M.build(ctx)
                 checked_func = function() return config.browser_hide_up_folder.hide_up_folder == true end,
                 callback = function()
                     config.browser_hide_up_folder.hide_up_folder =
-                        not (config.browser_hide_up_folder.hide_up_folder == true)
+                        config.browser_hide_up_folder.hide_up_folder ~= true
                     save_and_apply("browser_hide_up_folder")
                 end,
             },
@@ -384,7 +384,7 @@ function M.build(ctx)
                                 config.browser_page_count = {}
                             end
                             config.browser_page_count.show_page_count =
-                                not (config.browser_page_count.show_page_count == true)
+                                config.browser_page_count.show_page_count ~= true
                             plugin:saveConfig()
                             UIManager:setDirty(nil, "full")
                         end,
@@ -400,7 +400,7 @@ function M.build(ctx)
                                 config.browser_series_badge = {}
                             end
                             config.browser_series_badge.show_series_badge =
-                                not (config.browser_series_badge.show_series_badge == true)
+                                config.browser_series_badge.show_series_badge ~= true
                             plugin:saveConfig()
                             UIManager:setDirty(nil, "full")
                         end,
@@ -416,7 +416,7 @@ function M.build(ctx)
                                 config.browser_cover_badges = {}
                             end
                             config.browser_cover_badges.show_favorite_badge =
-                                not (config.browser_cover_badges.show_favorite_badge == true)
+                                config.browser_cover_badges.show_favorite_badge ~= true
                             plugin:saveConfig()
                             UIManager:setDirty(nil, "full")
                         end,
@@ -432,7 +432,7 @@ function M.build(ctx)
                                 config.browser_cover_badges = {}
                             end
                             config.browser_cover_badges.show_new_banner =
-                                not (config.browser_cover_badges.show_new_banner == true)
+                                config.browser_cover_badges.show_new_banner ~= true
                             plugin:saveConfig()
                             UIManager:setDirty(nil, "full")
                         end,
@@ -448,7 +448,7 @@ function M.build(ctx)
                                 config.browser_cover_badges = {}
                             end
                             config.browser_cover_badges.show_native_progress_bar =
-                                not (config.browser_cover_badges.show_native_progress_bar == true)
+                                config.browser_cover_badges.show_native_progress_bar ~= true
                             plugin:saveConfig()
                             UIManager:setDirty(nil, "full")
                         end,
@@ -464,7 +464,7 @@ function M.build(ctx)
                                 config.browser_cover_badges = {}
                             end
                             config.browser_cover_badges.show_mosaic_progress =
-                                not (config.browser_cover_badges.show_mosaic_progress == true)
+                                config.browser_cover_badges.show_mosaic_progress ~= true
                             plugin:saveConfig()
                             UIManager:setDirty(nil, "full")
                         end,
@@ -483,7 +483,7 @@ function M.build(ctx)
                         callback = function()
                             if type(config.features) ~= "table" then config.features = {} end
                             config.features.browser_cover_mosaic_uniform =
-                                not (config.features.browser_cover_mosaic_uniform == true)
+                                config.features.browser_cover_mosaic_uniform ~= true
                             plugin:saveConfig()
                             settings_apply.prompt_restart()
                         end,
@@ -525,7 +525,7 @@ function M.build(ctx)
                         config.browser_cover_badges = {}
                     end
                     config.browser_cover_badges.dim_finished_books =
-                        not (config.browser_cover_badges.dim_finished_books == true)
+                        config.browser_cover_badges.dim_finished_books ~= true
                     plugin:saveConfig()
                     UIManager:setDirty(nil, "full")
                 end,
@@ -539,7 +539,7 @@ function M.build(ctx)
                 callback = function()
                     if type(config.features) ~= "table" then config.features = {} end
                     config.features.browser_cover_rounded_corners =
-                        not (config.features.browser_cover_rounded_corners == true)
+                        config.features.browser_cover_rounded_corners ~= true
                     plugin:saveConfig()
                     UIManager:setDirty(nil, "full")
                 end,
@@ -555,7 +555,7 @@ function M.build(ctx)
                         config.mosaic_title_strip = {}
                     end
                     config.mosaic_title_strip.show_title =
-                        not (config.mosaic_title_strip.show_title == true)
+                        config.mosaic_title_strip.show_title ~= true
                     plugin:saveConfig()
                     settings_apply.prompt_restart()
                 end,
@@ -571,7 +571,7 @@ function M.build(ctx)
                         config.mosaic_title_strip = {}
                     end
                     config.mosaic_title_strip.show_author =
-                        not (config.mosaic_title_strip.show_author == true)
+                        config.mosaic_title_strip.show_author ~= true
                     plugin:saveConfig()
                     settings_apply.prompt_restart()
                 end,
@@ -1004,7 +1004,7 @@ function M.build(ctx)
             return config.features.browser_hide_underline ~= true
         end,
         callback = function()
-            config.features.browser_hide_underline = not (config.features.browser_hide_underline == true)
+            config.features.browser_hide_underline = config.features.browser_hide_underline ~= true
             save_and_apply("browser_hide_underline")
         end,
     })
@@ -1020,7 +1020,7 @@ function M.build(ctx)
                 config.browser_list_item_layout = {}
             end
             config.browser_list_item_layout.hide_list_borders =
-                not (config.browser_list_item_layout.hide_list_borders == true)
+                config.browser_list_item_layout.hide_list_borders ~= true
             plugin:saveConfig()
             -- updateItems rebuilds item_group so stripListBorders takes effect immediately.
             local ok_fm, FM = pcall(require, "apps/filemanager/filemanager")
@@ -1102,7 +1102,7 @@ function M.build(ctx)
                     })
                     for i, dir in ipairs(dirs) do
                         local util = require("util")
-                        local _d, name = util.splitFilePathName(dir)
+                        local name = select(2, util.splitFilePathName(dir))
                         table.insert(sub, {
                             text = name ~= "" and name or dir,
                             keep_menu_open = true,
@@ -1136,7 +1136,7 @@ function M.build(ctx)
         end,
         callback = function()
             if type(config.context_menu) ~= "table" then config.context_menu = {} end
-            config.context_menu.allow_delete = not (config.context_menu.allow_delete == true)
+            config.context_menu.allow_delete = config.context_menu.allow_delete ~= true
             plugin:saveConfig()
         end,
     })

@@ -1,5 +1,5 @@
 name: LuaCheck Gate
-description: Run LuaCheck and fail only when LuaCheck reports errors.
+description: Run LuaCheck and fail on any non-zero LuaCheck exit.
 
 inputs:
   lua-version:
@@ -26,33 +26,6 @@ runs:
       shell: bash
       run: luarocks install luacheck
 
-    - name: Run LuaCheck (warnings allowed)
+    - name: Run LuaCheck
       shell: bash
-      run: |
-        set +e
-        luacheck -q ${{ inputs.targets }} 2>&1 | tee /tmp/luacheck.out
-        luacheck_exit=${PIPESTATUS[0]}
-        set -e
-
-        totals_line=$(grep -E '^Total: [0-9]+ warning(s)? / [0-9]+ error(s)?' /tmp/luacheck.out | tail -n 1 || true)
-        read -r warnings errors <<< "$(awk '/^Total:/ {w=$2; e=$5} END {if (w ~ /^[0-9]+$/ && e ~ /^[0-9]+$/) print w, e}' /tmp/luacheck.out)"
-
-        if [[ -z "$warnings" || -z "$errors" || -z "$totals_line" ]]; then
-          if [[ "$luacheck_exit" -ne 0 ]]; then
-            echo "Luacheck failed before reporting totals (exit: $luacheck_exit)."
-            exit "$luacheck_exit"
-          fi
-          echo "Luacheck passed with no warnings."
-          exit 0
-        fi
-
-        if [[ "$errors" -gt 0 ]]; then
-          echo "Luacheck reported $errors errors."
-          exit 1
-        fi
-
-        if [[ "$luacheck_exit" -eq 1 || "$warnings" -gt 0 ]]; then
-          echo "Luacheck reported warnings only; continuing."
-        else
-          echo "Luacheck passed with no warnings."
-        fi
+      run: luacheck -q ${{ inputs.targets }}

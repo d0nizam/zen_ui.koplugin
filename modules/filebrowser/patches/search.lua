@@ -48,19 +48,8 @@ local function apply_search()
             end)
         end
 
-        local function _close()
-            UIManager:close(search_dialog)
-        end
-
         -- Patch InputDialog:onTap so tapping outside closes both keyboard AND dialog
         local orig_InputDialog_onTap = InputDialog.onTap
-
-        local Font = require("ui/font")
-        local TextWidget = require("ui/widget/textwidget")
-        local HorizontalGroup = require("ui/widget/horizontalgroup")
-        local HorizontalSpan = require("ui/widget/horizontalspan")
-        local Device = require("device")
-        local Screen = Device.screen
 
         local SEARCH_ICON = "\u{F002}"
 
@@ -154,7 +143,7 @@ local function apply_search()
             return true
         end
         local norm_search = normalize_for_search(search_string)
-        
+
         -- Filename matching
         if is_substring_enabled() then
             -- Substring matching
@@ -167,7 +156,7 @@ local function apply_search()
                 return true
             end
         end
-        
+
         -- Metadata matching
         if self.include_metadata and is_file and DocumentRegistry:hasProvider(fullpath) then
             local book_props = self.ui.bookinfo:getDocProps(fullpath, nil, true)

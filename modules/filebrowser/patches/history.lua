@@ -125,7 +125,6 @@ local function apply_history()
 
         -- === Fix partial-row left-alignment ===
         menu._do_center_partial_rows = false
-        local UIManager = require("ui/uimanager")
         menu:updateItems(1, true)
 
         -- Blank-space hold: open history display mode menu

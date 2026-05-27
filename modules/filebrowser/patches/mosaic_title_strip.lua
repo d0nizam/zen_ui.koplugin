@@ -59,7 +59,6 @@ local function apply_mosaic_title_strip()
     logger.dbg("zen-ui:mosaic_title_strip: patching MosaicMenuItem")
 
     local Blitbuffer = require("ffi/blitbuffer")
-    local Font       = require("ui/font")
     local TextWidget = require("ui/widget/textwidget")
     local BD         = require("ui/bidi")
     local library_font = require("common/library_font")

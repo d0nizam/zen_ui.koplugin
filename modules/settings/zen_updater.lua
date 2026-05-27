@@ -744,6 +744,7 @@ local function build_single_release_bullets(notes)
         local line = raw:gsub("\r", "")
         local trimmed = line:gsub("^%s+", ""):gsub("%s+$", "")
         if trimmed ~= "" then
+            -- Skip section headings like "## What's changed" in this compact view.
             if not trimmed:match("^##%s*") then
                 local item = trimmed:match("^[-*+]%s+(.+)$")
                     or trimmed:match("^%d+%.%s+(.+)$")
@@ -759,8 +760,6 @@ local function build_single_release_bullets(notes)
                         bullets[#bullets + 1] = plain
                     end
                 end
-            else
-                -- Skip section headings like "## What's changed" in this compact view.
             end
         end
     end

@@ -6,13 +6,6 @@
     Always applied.
 ]]
 
--- Resolve the plugin icons/ directory at module-load time.
-local _ICONS_DIR
-do
-    local root = require("common/plugin_root")
-    if root then _ICONS_DIR = root .. "/icons/" end
-end
-
 local function apply_browser_cover_badges()
     local BD             = require("ui/bidi")
     local Blitbuffer     = require("ffi/blitbuffer")
@@ -387,8 +380,8 @@ local function apply_browser_cover_badges()
                         - math.ceil((self.width - target.dimen.w) / 2)
                     cx = cover_right - border - r - inset
                 else
-                    local cover_left = x + math.floor((self.width - target.dimen.w) / 2)
-                    cx = cover_left + border + r + inset
+                    local cover_left_star = x + math.floor((self.width - target.dimen.w) / 2)
+                    cx = cover_left_star + border + r + inset
                 end
                 cy = target.dimen.y + border + r + inset
                 -- Border ring then fill
@@ -449,8 +442,8 @@ local function apply_browser_cover_badges()
                     local bh = math.floor(eff_size * 1.1)
 
                     -- Align to top-right edge of cover frame, inset slightly
-                    local cover_left = x + math.floor((self.width - target.dimen.w) / 2)
-                    local bdg_x = cover_left + target.dimen.w - bw - math.floor(bw * 0.25)
+                    local cover_left_badge = x + math.floor((self.width - target.dimen.w) / 2)
+                    local bdg_x = cover_left_badge + target.dimen.w - bw - math.floor(bw * 0.25)
                     -- Shift down by border thickness so border top aligns with cover top
                     local bdg_y = target.dimen.y + 2
 
@@ -574,17 +567,17 @@ local function apply_browser_cover_badges()
                     local band_thick = math.floor(span * 0.35)
                     -- Font tied to cover size, not band thickness, so it stays small regardless of ribbon scale
                     local font_sz    = math.max(6, math.floor(eff_size * 0.25))
-                    local cover_left = x + math.floor((self.width - target.dimen.w) / 2)
+                    local cover_left_new = x + math.floor((self.width - target.dimen.w) / 2)
                     paintCornerBanner(bb,
-                        cover_left, cover_left + target.dimen.w,
+                        cover_left_new, cover_left_new + target.dimen.w,
                         target.dimen.y, target.dimen.h,
                         span, band_thick, _("New"), font_sz,
                         utils.getBadgeColor(_plugin and _plugin.config), badge_fg)
                     -- Repaint cover border over banner so it isn't obscured
                     if border > 0 then
                         local bclr = target.bordercolor or Blitbuffer.COLOR_BLACK
-                        bb:paintRect(cover_left, target.dimen.y, target.dimen.w, border, bclr)
-                        bb:paintRect(cover_left + target.dimen.w - border, target.dimen.y, border, target.dimen.h, bclr)
+                        bb:paintRect(cover_left_new, target.dimen.y, target.dimen.w, border, bclr)
+                        bb:paintRect(cover_left_new + target.dimen.w - border, target.dimen.y, border, target.dimen.h, bclr)
                     end
                 end
             end

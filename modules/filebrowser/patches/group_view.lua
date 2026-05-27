@@ -411,7 +411,6 @@ local function patch_mosaic_item()
         local dimen = { w = portrait_w + 2 * border, h = portrait_h + 2 * border }
         local image_widget
         if is_stack then
-            local CoverUtils = require("common/cover_utils")
             image_widget = CoverUtils.drawStack(covers, portrait_w, portrait_h, border)
         else
             image_widget = FrameContainer:new{
@@ -482,7 +481,6 @@ local function patch_list_item()
     local CoverUtils      = require("common/cover_utils")
     local CenterContainer = require("ui/widget/container/centercontainer")
     local Device          = require("device")
-    local Font            = require("ui/font")
     local library_font    = require("common/library_font")
     local FrameContainer  = require("ui/widget/container/framecontainer")
     local HorizontalGroup = require("ui/widget/horizontalgroup")
@@ -636,7 +634,6 @@ local function patch_list_item()
                     }
                 end
             elseif stack_mode then
-                local CoverUtils = require("common/cover_utils")
                 cover_frame = CoverUtils.drawStack(covers, cover_w, max_img, border_size)
                 if #covers > 0 then
                     self.menu._has_cover_images = true
@@ -802,8 +799,6 @@ end
 -------------------------------------------------------------------------------
 local function clean_nav(menu, tab_label, back_callback)
     if not menu then return end
-
-    local UIManager_mod = require("ui/uimanager")
 
     menu._do_center_partial_rows = false
 
@@ -1370,7 +1365,6 @@ local function showDetailView(group_item, injectNavbar, tab_id)
     local Menu      = require("ui/widget/menu")
     local TitleBar  = require("ui/widget/titlebar")
     local UIManager = require("ui/uimanager")
-    local ReaderUI  = require("apps/reader/readerui")
 
     local files      = group_item._zen_files or {}
     local group_name = group_item.text or ""
@@ -1876,7 +1870,6 @@ function M.showTBRView(injectNavbar)
     local Menu       = require("ui/widget/menu")
     local TitleBar   = require("ui/widget/titlebar")
     local UIManager  = require("ui/uimanager")
-    local ReaderUI   = require("apps/reader/readerui")
 
     local ok, db = pcall(require, "common/db_bookinfo")
     if not ok then return end

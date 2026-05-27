@@ -220,7 +220,7 @@ local function apply_collections()
             local bh = self.height - 2 * border
 
             -- Use unified makeCover - it handles everything: mode detection, cover collection, drawing
-            local cover_widget, mode, scenario = Cover.makeCover(coll_name, fake_chooser, {
+            local cover_widget, cover_mode, scenario = Cover.makeCover(coll_name, fake_chooser, {
                 is_folder = true,
                 max_w = max_w,
                 max_h = bh,
@@ -228,7 +228,7 @@ local function apply_collections()
             })
 
             if self._setFolderCover then
-                if scenario == "empty_folder" then
+                if scenario == "empty_folder" or cover_mode == "none" then
                     self:_setFolderCover { no_image = true, book_count = book_count }
                 else
                     -- makeCover already returned the appropriate widget based on mode
@@ -272,25 +272,15 @@ local function apply_collections()
 
         local BD              = require("ui/bidi")
         local Blitbuffer      = require("ffi/blitbuffer")
-        local BookInfoManager = require("bookinfomanager")
-        local CenterContainer = require("ui/widget/container/centercontainer")
         local Device          = require("device")
-        local Font            = require("ui/font")
-        local library_font    = require("common/library_font")
-        local FrameContainer  = require("ui/widget/container/framecontainer")
         local HorizontalGroup = require("ui/widget/horizontalgroup")
         local HorizontalSpan  = require("ui/widget/horizontalspan")
-        local ImageWidget     = require("ui/widget/imagewidget")
         local LeftContainer   = require("ui/widget/container/leftcontainer")
-        local LineWidget      = require("ui/widget/linewidget")
-        local OverlapGroup    = require("ui/widget/overlapgroup")
         local ReadCollection  = require("readcollection")
         local RightContainer  = require("ui/widget/container/rightcontainer")
         local Size            = require("ui/size")
         local TextBoxWidget   = require("ui/widget/textboxwidget")
         local TextWidget      = require("ui/widget/textwidget")
-        local VerticalGroup   = require("ui/widget/verticalgroup")
-        local VerticalSpan    = require("ui/widget/verticalspan")
 
         local Screen = Device.screen
         local scale_by_size = Screen:scaleBySize(1000000) * (1 / 1000000)
@@ -338,7 +328,7 @@ local function apply_collections()
             local fake_chooser = build_fake_chooser_from_files(files)
 
             -- Use unified makeCover
-            local cover_widget, mode, scenario = Cover.makeCover(coll_name, fake_chooser, {
+            local cover_widget = Cover.makeCover(coll_name, fake_chooser, {
                 is_folder = true,
                 max_w = cover_w + 2 * border_size,
                 max_h = max_img + 2 * border_size,

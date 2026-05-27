@@ -100,7 +100,6 @@ local function apply_page_browser()
         local IconButton = require("ui/widget/iconbutton")
         local IconWidget = require("ui/widget/iconwidget")
         local HorizontalGroup = require("ui/widget/horizontalgroup")
-        local HorizontalSpan  = require("ui/widget/horizontalspan")
         local VerticalGroup   = require("ui/widget/verticalgroup")
         local VerticalSpan    = require("ui/widget/verticalspan")
         local TextWidget      = require("ui/widget/textwidget")
@@ -545,8 +544,6 @@ local function apply_page_browser()
             -- Throttle interval for setDirty during drag (seconds).
             -- GL16 takes ~450ms on Kobo; firing faster than this just queues
             -- competing waveform cycles that produce artifacts.
-            local SCRUB_DIRTY_INTERVAL = 0.15
-
             -- Deferred full update used to debounce thumbnail re-render during drag.
             -- Fires after 250 ms of slider inactivity regardless of whether the
             -- finger is still down; if the user resumes dragging, on_change will
@@ -1511,14 +1508,11 @@ local function apply_page_browser()
     -- -----------------------------------------------------------------------
     local ok_rs, ReaderSearch = pcall(require, "apps/reader/modules/readersearch")
     if ok_rs and ReaderSearch then
-        local BD          = require("ui/bidi")
         local InputDialog = require("ui/widget/inputdialog")
-        local CheckButton = require("ui/widget/checkbutton")
         local Screen_s    = require("device").screen
         local _           = require("gettext")
         local logger_rs   = require("logger")
 
-        local _orig_onShowFulltextSearchInput = ReaderSearch.onShowFulltextSearchInput
         local _orig_InputDialog_onTap = InputDialog.onTap
 
         local SEARCH_ICON = "\u{F002}"
@@ -1555,21 +1549,21 @@ local function apply_page_browser()
             self.check_button_regex = { checked = false }
 
             -- Tap outside = close keyboard + dialog together
-            function self.input_dialog:onTap(arg, ges)
-                if self.deny_keyboard_hiding then return end
-                if self:isKeyboardVisible() then
-                    local kb = self._input_widget and self._input_widget.keyboard
+            self.input_dialog.onTap = function(dialog_self, arg, ges)
+                if dialog_self.deny_keyboard_hiding then return end
+                if dialog_self:isKeyboardVisible() then
+                    local kb = dialog_self._input_widget and dialog_self._input_widget.keyboard
                     if kb and kb.dimen
                        and ges.pos:notIntersectWith(kb.dimen)
-                       and ges.pos:notIntersectWith(self.dialog_frame.dimen) then
-                        self:onCloseKeyboard()
-                        UIManager:close(self)
+                       and ges.pos:notIntersectWith(dialog_self.dialog_frame.dimen) then
+                        dialog_self:onCloseKeyboard()
+                        UIManager:close(dialog_self)
                         return true
                     end
-                    return _orig_InputDialog_onTap(self, arg, ges)
+                    return _orig_InputDialog_onTap(dialog_self, arg, ges)
                 else
-                    if ges.pos:notIntersectWith(self.dialog_frame.dimen) then
-                        UIManager:close(self)
+                    if ges.pos:notIntersectWith(dialog_self.dialog_frame.dimen) then
+                        UIManager:close(dialog_self)
                         return true
                     end
                 end

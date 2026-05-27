@@ -69,7 +69,6 @@ end
 -- ============================================================
 
 function CoverUtils.genCover(filepath, target_w, target_h)
-    local ratio = CoverUtils.getRatio()
     local width, height
 
     if target_w and target_h then
@@ -350,9 +349,7 @@ function CoverUtils.collect(dir_path, chooser, max_covers, need_copy, entries)
             -- skip folder cover image files (cover.png, .cover.png, cover1.jpg, etc.)
             local _fname = (fpath:match("([^/]+)$") or ""):lower()
             local _fext  = _fname:match("%.([^%.]+)$")
-            if _fext and _img_exts[_fext] and _fname:match("^%.?cover%d*%.") then
-                -- not a book; skip
-            else
+            if not (_fext and _img_exts[_fext] and _fname:match("^%.?cover%d*%.")) then
                 local bookinfo = BookInfoManager:getBookInfo(fpath, true)
                 if bookinfo and bookinfo.cover_bb and bookinfo.has_cover
                         and bookinfo.cover_fetched and not bookinfo.ignore_cover then
@@ -596,7 +593,6 @@ function CoverUtils.drawNoImage(folder_name, portrait_w, portrait_h, border)
     local CenterContainer = require("ui/widget/container/centercontainer")
     local FrameContainer = require("ui/widget/container/framecontainer")
     local ImageWidget = require("ui/widget/imagewidget")
-    local TextBoxWidget = require("ui/widget/textboxwidget")
 
     -- Use constant colors; original_in_nightmode=false lets the screen's live
     -- inversion handle night mode so the cover updates immediately on toggle.
@@ -719,9 +715,9 @@ function CoverUtils.makeCover(path, chooser, options)
         if ok then
             local bookinfo = BookInfoManager:getBookInfo(path, true)
 
-            if bookinfo and bookinfo.cover_bb and bookinfo.has_cover
-                    and bookinfo.cover_fetched and not bookinfo.ignore_cover then
-                local scaled_bb, sw, sh = CoverUtils.scaleCover(
+                if bookinfo and bookinfo.cover_bb and bookinfo.has_cover
+                        and bookinfo.cover_fetched and not bookinfo.ignore_cover then
+                local scaled_bb = CoverUtils.scaleCover(
                     bookinfo.cover_bb, bookinfo.cover_w, bookinfo.cover_h,
                     final_w, final_h)
                 local need_copy = options.need_copy == true
@@ -763,7 +759,7 @@ function CoverUtils.makeCover(path, chooser, options)
 
     local portrait_w, portrait_h = CoverUtils.calcDims(max_w, max_h)
 
-    local cover_widget = nil
+    local cover_widget
 
     local scaled_covers = {}
     for _i, c in ipairs(covers) do

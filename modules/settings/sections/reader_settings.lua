@@ -412,7 +412,7 @@ function M.build(ctx)
                         config.highlight_lookup = {}
                     end
                     config.highlight_lookup.show_wikipedia =
-                        not (config.highlight_lookup.show_wikipedia == true)
+                        config.highlight_lookup.show_wikipedia ~= true
                     plugin:saveConfig()
                 end,
             },
@@ -428,7 +428,7 @@ function M.build(ctx)
                         config.highlight_lookup = {}
                     end
                     config.highlight_lookup.allow_unknown_items =
-                        not (config.highlight_lookup.allow_unknown_items == true)
+                        config.highlight_lookup.allow_unknown_items ~= true
                     plugin:saveConfig()
                 end,
             },
@@ -446,7 +446,7 @@ function M.build(ctx)
                 config.reader_footer = {}
             end
             config.reader_footer.verbose_chapter_time =
-                not (config.reader_footer.verbose_chapter_time == true)
+                config.reader_footer.verbose_chapter_time ~= true
             plugin:saveConfig()
         end,
     })
@@ -466,7 +466,7 @@ function M.build(ctx)
             return config.features["page_browser"] ~= true
         end,
         callback = function()
-            config.features["reader_bottom_menu"] = not (config.features["reader_bottom_menu"] == true)
+            config.features["reader_bottom_menu"] = config.features["reader_bottom_menu"] ~= true
             save_and_apply("reader_bottom_menu")
         end,
     })
@@ -481,7 +481,7 @@ function M.build(ctx)
                 or config.features["page_browser"] == true
         end,
         callback = function()
-            config.features["page_browser"] = not (config.features["page_browser"] == true)
+            config.features["page_browser"] = config.features["page_browser"] ~= true
             save_and_apply("page_browser")
         end,
     })
@@ -491,7 +491,7 @@ function M.build(ctx)
             return config.features["restore_library_view"] == true
         end,
         callback = function()
-            config.features["restore_library_view"] = not (config.features["restore_library_view"] == true)
+            config.features["restore_library_view"] = config.features["restore_library_view"] ~= true
             save_and_apply("restore_library_view")
         end,
     })
@@ -615,7 +615,7 @@ function M.build(ctx)
                         config.reader_footer = {}
                     end
                     config.reader_footer.hide_in_cbz =
-                        not (config.reader_footer.hide_in_cbz == true)
+                        config.reader_footer.hide_in_cbz ~= true
                     plugin:saveConfig()
                     -- Apply immediately to the current open document.
                     local footer = ui and ui.view and ui.view.footer
