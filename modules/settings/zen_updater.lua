@@ -90,6 +90,15 @@ local function semver_eq(a, b)
     return (not semver_gt(a, b)) and (not semver_gt(b, a))
 end
 
+local function shell_result_ok(rc, how, code)
+    if rc == true then
+        return true
+    elseif type(rc) == "number" then
+        return rc == 0
+    end
+    return rc ~= nil and how == "exit" and code == 0
+end
+
 --- Read the current plugin version from _meta.lua.
 local function get_current_version()
     local ok, meta = pcall(dofile, PLUGIN_ROOT .. "/_meta.lua")
@@ -970,14 +979,7 @@ end
 local function run_shell_ok(cmd, label)
     logger.dbg("ZenUpdater: shell start", label or "", cmd)
     local rc, how, code = os.execute(cmd)
-    local ok
-    if rc == true then
-        ok = true
-    elseif type(rc) == "number" then
-        ok = rc == 0
-    else
-        ok = rc ~= nil and how == "exit" and code == 0
-    end
+    local ok = shell_result_ok(rc, how, code)
     logger.dbg("ZenUpdater: shell done", label or "", "ok=", tostring(ok), "rc=", tostring(rc), "how=", tostring(how), "code=", tostring(code))
     return ok
 end
@@ -992,6 +994,61 @@ end
 
 local function path_is_readable_file(path)
     return run_shell_ok(string.format("test -r %q", path))
+end
+
+local function get_file_size_bytes(path)
+    local f = io.open(path, "rb")
+    if not f then return nil end
+    local size = tonumber(f:seek("end"))
+    f:close()
+    return size
+end
+
+local function run_shell_capture_lines(cmd, label, max_lines)
+    logger.dbg("ZenUpdater: shell capture start", label or "", cmd)
+    local pipe = io.popen(cmd)
+    if not pipe then
+        logger.warn("ZenUpdater: shell capture popen failed label=", label or "")
+        return false, {}
+    end
+
+    local limit = tonumber(max_lines) or 20
+    local total_lines = 0
+    local lines = {}
+    for raw in pipe:lines() do
+        local line = (raw or ""):gsub("\r", "")
+        if line ~= "" then
+            total_lines = total_lines + 1
+            if #lines < limit then
+                lines[#lines + 1] = line
+            end
+        end
+    end
+
+    local close_ok, rc, how, code = pcall(pipe.close, pipe)
+    if not close_ok then
+        logger.warn("ZenUpdater: shell capture close failed label=", label or "")
+        return false, lines
+    end
+
+    local ok = shell_result_ok(rc, how, code)
+    logger.dbg(
+        "ZenUpdater: shell capture done",
+        label or "",
+        "ok=",
+        tostring(ok),
+        "rc=",
+        tostring(rc),
+        "how=",
+        tostring(how),
+        "code=",
+        tostring(code),
+        "line_count=",
+        total_lines,
+        "stored_lines=",
+        #lines
+    )
+    return ok, lines
 end
 
 local function collect_zip_entries_with_command(cmd, label)
@@ -1010,13 +1067,31 @@ local function collect_zip_entries_with_command(cmd, label)
         end
     end
 
-    local close_ok = pcall(pipe.close, pipe)
+    local close_ok, rc, how, code = pcall(pipe.close, pipe)
     if not close_ok then
         logger.warn("ZenUpdater: zip list close failed method=", label)
         return nil
     end
+    local ok = shell_result_ok(rc, how, code)
 
-    logger.dbg("ZenUpdater: zip list done method=", label, "entry_count=", #entries)
+    logger.dbg(
+        "ZenUpdater: zip list done method=",
+        label,
+        "entry_count=",
+        #entries,
+        "ok=",
+        tostring(ok),
+        "rc=",
+        tostring(rc),
+        "how=",
+        tostring(how),
+        "code=",
+        tostring(code)
+    )
+    if not ok then
+        logger.warn("ZenUpdater: zip list command returned non-zero method=", label)
+        return nil
+    end
     if #entries == 0 then
         return nil
     end
@@ -1045,6 +1120,53 @@ local function collect_zip_entries(zip_path)
         return nil
     end
     return parsed
+end
+
+local function check_zip_integrity(zip_path)
+    logger.dbg(
+        "ZenUpdater: check_zip_integrity zip_path=",
+        zip_path,
+        "exists=",
+        tostring(path_exists(zip_path)),
+        "size_bytes=",
+        tostring(get_file_size_bytes(zip_path))
+    )
+
+    if run_shell_ok(string.format("unzip -t %q >/dev/null 2>&1", zip_path), "zip_integrity") then
+        logger.dbg("ZenUpdater: zip integrity unzip -t passed")
+        return true
+    end
+
+    local _ok, test_lines = run_shell_capture_lines(
+        string.format("unzip -t %q 2>&1", zip_path),
+        "zip_integrity_fail_output",
+        16
+    )
+    if #test_lines > 0 then
+        logger.warn("ZenUpdater: unzip -t output:\n" .. table.concat(test_lines, "\n"))
+    else
+        logger.warn("ZenUpdater: unzip -t produced no diagnostic output")
+    end
+
+    logger.warn("ZenUpdater: unzip -t failed, falling back to zip listing validation")
+    local entries = collect_zip_entries(zip_path)
+    if entries and #entries > 0 then
+        local sample = {}
+        for _i, entry in ipairs(entries) do
+            if #sample >= 8 then break end
+            sample[#sample + 1] = entry
+        end
+        logger.dbg(
+            "ZenUpdater: zip integrity fallback accepted entry_count=",
+            #entries,
+            "sample=",
+            table.concat(sample, " | ")
+        )
+        return true
+    end
+
+    logger.warn("ZenUpdater: zip integrity fallback failed to parse entries")
+    return false
 end
 
 local function validate_zip_layout(zip_path, plugin_name)
@@ -1259,6 +1381,15 @@ local function _do_install(screen, plugin_root, plugins_dir)
             return
         end
 
+        logger.dbg(
+            "ZenUpdater: download artifact ready zip=",
+            zip_path,
+            "exists=",
+            tostring(path_exists(zip_path)),
+            "size_bytes=",
+            tostring(get_file_size_bytes(zip_path))
+        )
+
         -- Preflight checks before touching the active plugin folder.
         logger.dbg("ZenUpdater: preflight start")
         if not prepare_plugins_dir_writable(plugins_dir) then
@@ -1267,7 +1398,7 @@ local function _do_install(screen, plugin_root, plugins_dir)
             return
         end
 
-        if not run_shell_ok(string.format("unzip -t %q >/dev/null 2>&1", zip_path), "zip_integrity") then
+        if not check_zip_integrity(zip_path) then
             os.remove(zip_path)
             fail_with(_("Update failed: corrupted update package."))
             return
@@ -1280,6 +1411,7 @@ local function _do_install(screen, plugin_root, plugins_dir)
             fail_with(_("Update failed: invalid package layout."))
             return
         end
+        logger.dbg("ZenUpdater: preflight checks passed")
 
         screen:update{ subtitle = _("Installing") .. "...", button = false }
         UIManager:forceRePaint()
@@ -1306,6 +1438,16 @@ local function _do_install(screen, plugin_root, plugins_dir)
         end
 
         if not run_shell_ok(string.format("unzip -q %q -d %q", zip_path, stage_parent), "unzip_to_stage") then
+            local _ok_unpack, unpack_lines = run_shell_capture_lines(
+                string.format("unzip %q -d %q 2>&1", zip_path, stage_parent),
+                "unzip_to_stage_fail_output",
+                20
+            )
+            if #unpack_lines > 0 then
+                logger.warn("ZenUpdater: unzip_to_stage output:\n" .. table.concat(unpack_lines, "\n"))
+            else
+                logger.warn("ZenUpdater: unzip_to_stage produced no diagnostic output")
+            end
             safe_remove_tree(stage_parent)
             os.remove(zip_path)
             fail_with(_("Update failed: could not unpack update package."))
