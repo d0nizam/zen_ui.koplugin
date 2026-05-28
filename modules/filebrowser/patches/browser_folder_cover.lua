@@ -382,7 +382,7 @@ local function apply_browser_folder_cover()
             local _bcc = _fc and type(_fc.config) == "table"
                 and type(_fc.config.browser_cover_badges) == "table"
                 and _fc.config.browser_cover_badges.badge_color
-            local badge_is_dark = type(_bcc) == "table" and _bcc[1] == 0 and _bcc[2] == 0 and _bcc[3] == 0
+            local badge_is_dark = _bcc == nil or (type(_bcc) == "table" and _bcc[1] == 0 and _bcc[2] == 0 and _bcc[3] == 0)
             local badge_fg = badge_is_dark and _BlitBadge.COLOR_WHITE or _BlitBadge.COLOR_BLACK
             if tw then
                 if rawget(self, "_zen_badge_str") ~= count_str or rawget(self, "_zen_badge_fs") ~= font_size or rawget(self, "_zen_badge_dark") ~= badge_is_dark then

@@ -328,11 +328,12 @@ function M.build(ctx)
                             UIManager:setDirty(nil, "full")
                         end,
                         default_text = _("Default"),
-                        reset_text   = _("Default (gray)"),
+                        reset_text   = _("Default (black)"),
                         dialog_title = _("Badge color RGB"),
                         presets = {
                             { text = _("Black"), r = 0,    g = 0,    b = 0    },
                             { text = _("White"), r = 255,  g = 255,  b = 255  },
+                            { text = _("Gray"),  r = 204,  g = 204,  b = 204  },
                             { text = _("Blue"),  r = 0x99, g = 0xBB, b = 0xF0 },
                             { text = _("Green"), r = 0x99, g = 0xCC, b = 0x99 },
                             { text = _("Amber"), r = 0xF0, g = 0xD0, b = 0x80 },

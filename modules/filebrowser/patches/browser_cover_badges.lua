@@ -341,7 +341,7 @@ local function apply_browser_cover_badges()
             local _bc = _plugin and type(_plugin.config) == "table"
                 and type(_plugin.config.browser_cover_badges) == "table"
                 and _plugin.config.browser_cover_badges.badge_color
-            local badge_is_dark = type(_bc) == "table" and _bc[1] == 0 and _bc[2] == 0 and _bc[3] == 0
+            local badge_is_dark = _bc == nil or (type(_bc) == "table" and _bc[1] == 0 and _bc[2] == 0 and _bc[3] == 0)
             local badge_fg = badge_is_dark and Blitbuffer.COLOR_WHITE or Blitbuffer.COLOR_BLACK
 
             local cover_left = x + math.floor((self.width - target.dimen.w) / 2)

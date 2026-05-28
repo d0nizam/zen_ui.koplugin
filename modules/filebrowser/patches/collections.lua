@@ -83,7 +83,7 @@ local function apply_collections()
         menu._zen_coll_list = true
 
         if not display_mode then
-            return "classic"
+            display_mode = "mosaic"
         end
 
         local ok_cm, CoverMenu = pcall(require, "covermenu")

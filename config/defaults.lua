@@ -156,7 +156,7 @@ local defaults = {
         show_folder_name = true,
         name_centered = false,    -- false = bottom placement
         name_opaque = false,      -- false = transparent bg
-        show_spine_lines = true,
+        show_spine_lines = false,
         show_item_count = true,
         crop_to_fit = true,
     },

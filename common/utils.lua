@@ -267,12 +267,12 @@ function M.getBadgeColor(config)
         and type(config.browser_cover_badges) == "table"
         and config.browser_cover_badges.badge_color
     if type(c) == "table" then
-        local r = math.max(0, math.min(255, tonumber(c[1]) or 204))
-        local g = math.max(0, math.min(255, tonumber(c[2]) or 204))
-        local b = math.max(0, math.min(255, tonumber(c[3]) or 204))
+        local r = math.max(0, math.min(255, tonumber(c[1]) or 0))
+        local g = math.max(0, math.min(255, tonumber(c[2]) or 0))
+        local b = math.max(0, math.min(255, tonumber(c[3]) or 0))
         return Blitbuffer.ColorRGB32(r, g, b, 255)
     end
-    return Blitbuffer.COLOR_LIGHT_GRAY
+    return Blitbuffer.COLOR_BLACK
 end
 
 --- Returns the foreground color for text/icons drawn inside a badge.
@@ -282,7 +282,8 @@ function M.getBadgeTextColor(config)
     local c = type(config) == "table"
         and type(config.browser_cover_badges) == "table"
         and config.browser_cover_badges.badge_color
-    if type(c) == "table" and c[1] == 0 and c[2] == 0 and c[3] == 0 then
+    -- nil means default (black), so text is white; explicit non-black gets black text.
+    if c == nil or (type(c) == "table" and c[1] == 0 and c[2] == 0 and c[3] == 0) then
         return Blitbuffer.COLOR_WHITE
     end
     return Blitbuffer.COLOR_BLACK
