@@ -1385,8 +1385,7 @@ local function apply_context_menu()
                                 or file_chooser.path
                             if not move_home_dir then return end
                             local src_dir = ffiUtil.realpath(ffiUtil.dirname(src))
-                            local _g = rawget(_G, "G_reader_settings")
-                            local _zen_cfg = _g and _g:readSetting("zen_ui_config")
+                            local _zen_cfg = require("config/manager").get()
                             local _extra = type(_zen_cfg) == "table"
                                 and type(_zen_cfg.additional_home_dirs) == "table"
                                 and _zen_cfg.additional_home_dirs or nil

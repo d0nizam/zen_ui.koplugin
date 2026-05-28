@@ -27,8 +27,9 @@ end
 -- ============================================================
 
 function CoverUtils.getMode()
-    local G = rawget(_G, "G_reader_settings")
-    local cfg = G and G:readSetting("zen_ui_config")
+    local p = rawget(_G, "__ZEN_UI_PLUGIN")
+    local cfg = (type(p) == "table" and type(p.config) == "table" and p.config)
+        or require("config/manager").get()
     local fbc = type(cfg) == "table" and cfg.browser_folder_cover or nil
     local mode = type(fbc) == "table" and fbc.cover_mode or "gallery"
     if mode == "gallery" then

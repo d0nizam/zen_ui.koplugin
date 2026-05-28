@@ -247,6 +247,16 @@ function ZenUI:init()
 
         local current_ver = get_plugin_version()
         local shown_ver   = self.config._meta.quickstart_shown_for_version
+
+        -- Normalize sentinel set by manager.lua for existing installs that
+        -- predated the quickstart feature. Persisting current_ver prevents
+        -- false-positive install and update screens on subsequent boots.
+        if shown_ver == "pre-quickstart" then
+            shown_ver = current_ver
+            self.config._meta.quickstart_shown_for_version = current_ver
+            self:saveConfig()
+        end
+
         local updater_cfg = (type(self.config.updater) == "table") and self.config.updater or nil
 
         -- One-shot flag written by zen_updater before restart; takes priority
@@ -536,18 +546,17 @@ function ZenUI:deletePluginSettings()
     zen_updater.cancel_wakeup_check()
     zen_updater._on_update_found = nil
 
+    -- Delete the dedicated settings file
+    pcall(os.remove, ConfigManager.settingsPath())
+
+    -- Also clean up any legacy G_reader_settings key left from before the
+    -- file-based migration completed (e.g., plugin disabled mid-boot).
     local gs = rawget(_G, "G_reader_settings")
-    if not gs or type(gs.delSetting) ~= "function" then
-        return true
+    if gs and type(gs.delSetting) == "function" then
+        pcall(gs.delSetting, gs, ConfigManager.key())
+        pcall(gs.flush, gs)
     end
 
-    local function remove_key(key_name)
-        if type(key_name) ~= "string" or key_name == "" then return end
-        pcall(gs.delSetting, gs, key_name)
-    end
-
-    remove_key(ConfigManager.key())
-    pcall(gs.flush, gs)
     logger.info("ZenUI: deletePluginSettings completed")
     return true
 end
