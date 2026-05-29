@@ -7,6 +7,7 @@ local UIManager = require("ui/uimanager")
 local paths = require("common/paths")
 
 local status_bar_section  = require("modules/settings/sections/library_settings/status_bar_settings")
+local dashboard_section   = require("modules/settings/sections/library_settings/dashboard_settings")
 local settings_apply      = require("modules/settings/zen_settings_apply")
 local zen_settings_utils  = require("modules/settings/zen_settings_utils")
 
@@ -65,6 +66,7 @@ function M.build(ctx)
     local items = {}
 
     table.insert(items, status_bar_section.build(ctx))
+    table.insert(items, dashboard_section.build(ctx))
 
     table.insert(items, {
         text_func = function()

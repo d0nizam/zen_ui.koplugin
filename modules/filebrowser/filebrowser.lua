@@ -41,6 +41,7 @@ local PATCH_MODULES = {
     browser_display_mode_by_path = "modules/filebrowser/patches/browser_display_mode_by_path",
     search = "modules/filebrowser/patches/search",
     group_view = "modules/filebrowser/patches/group_view",
+    dashboard_page = "modules/filebrowser/patches/dashboard_page",
     status_on_open = "modules/filebrowser/patches/status_on_open",
 }
 
@@ -176,6 +177,11 @@ function M.init(logger, plugin)
     local group_view_fn = load_patch("group_view")
     if group_view_fn then
         run_feature(logger, plugin, "group_view", group_view_fn)
+    end
+
+    local dashboard_page_fn = load_patch("dashboard_page")
+    if dashboard_page_fn then
+        run_feature(logger, plugin, "dashboard_page", dashboard_page_fn)
     end
 
     local status_on_open_fn = load_patch("status_on_open")

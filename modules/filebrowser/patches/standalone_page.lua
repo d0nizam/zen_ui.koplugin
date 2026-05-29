@@ -1,0 +1,148 @@
+local Menu = require("ui/widget/menu")
+local TitleBar = require("ui/widget/titlebar")
+local Geom = require("ui/geometry")
+
+local M = {}
+
+local function remove_from_overlap(group, widget)
+    if not widget then return end
+    for i = #group, 1, -1 do
+        if rawequal(group[i], widget) then
+            table.remove(group, i)
+            return
+        end
+    end
+end
+
+function M.create_menu(opts)
+    opts = opts or {}
+
+    local orig_tb_new = TitleBar.new
+    TitleBar.new = function(cls, t)
+        if type(t) == "table" then
+            t.subtitle = nil
+            t.subtitle_fullwidth = nil
+            t.left_icon = nil
+            t.left_icon_tap_callback = nil
+            t.left_icon_hold_callback = nil
+            t.right_icon = nil
+            t.right_icon_tap_callback = nil
+            t.right_icon_hold_callback = nil
+            t.close_callback = nil
+            t.title_tap_callback = nil
+            t.title_hold_callback = nil
+            t.bottom_v_padding = 0
+            t.title = " "
+        end
+        return orig_tb_new(cls, t)
+    end
+
+    local ok_menu, menu_or_err = pcall(Menu.new, Menu, {
+        name = opts.name,
+        title = opts.title or " ",
+        covers_fullscreen = true,
+        is_borderless = true,
+        is_popout = false,
+        title_bar_fm_style = true,
+        item_table = opts.item_table or {},
+        onMenuSelect = opts.onMenuSelect,
+        onMenuHold = opts.onMenuHold,
+    })
+
+    TitleBar.new = orig_tb_new
+    if not ok_menu then
+        error(menu_or_err)
+    end
+
+    return menu_or_err
+end
+
+function M.hide_page_arrow(menu)
+    if not menu then return end
+    local page_arrow = menu.page_return_arrow
+    if page_arrow then
+        page_arrow:hide()
+        page_arrow.show = function() end
+        page_arrow.showHide = function() end
+        page_arrow.dimen = Geom:new{ w = 0, h = 0 }
+    end
+end
+
+function M.suppress_page_info_tap(menu)
+    if not menu then return end
+    if menu.page_info_text then
+        menu.page_info_text.tap_input = nil
+        menu.page_info_text.hold_input = nil
+    end
+end
+
+function M.prepare_shell(menu)
+    if not menu then return end
+    menu.updateItems = function() end
+    M.hide_page_arrow(menu)
+    M.suppress_page_info_tap(menu)
+end
+
+function M.apply_status_row(menu, params)
+    if not menu then return end
+    params = params or {}
+
+    local tb = menu.title_bar
+    if not tb then return end
+
+    local createStatusRow = params.createStatusRow
+    local createStatusRowCustomBack = params.createStatusRowCustomBack
+    local repaintTitleBar = params.repaintTitleBar
+    local back_callback = params.back_callback
+    local label = params.label
+
+    local function build_row()
+        if back_callback and createStatusRowCustomBack then
+            return createStatusRowCustomBack(back_callback, label)
+        elseif createStatusRow then
+            local FileManager = require("apps/filemanager/filemanager")
+            return createStatusRow(nil, FileManager.instance)
+        end
+    end
+
+    remove_from_overlap(tb, tb.left_button)
+    remove_from_overlap(tb, tb.right_button)
+    tb.has_left_icon = false
+    tb.has_right_icon = false
+
+    if tb.title_group and #tb.title_group >= 2 then
+        local row = build_row()
+        if row then
+            tb.title_group[2] = row
+            tb.title_group:resetLayout()
+        end
+    end
+
+    menu._zen_status_refresh = function()
+        local row = build_row()
+        if row and tb.title_group and #tb.title_group >= 2 then
+            tb.title_group[2] = row
+            tb.title_group:resetLayout()
+            if repaintTitleBar then repaintTitleBar(tb) end
+        end
+    end
+end
+
+function M.mount_body(menu, body_widget)
+    if not menu or not menu.item_group then return end
+    while #menu.item_group > 0 do table.remove(menu.item_group) end
+    menu.item_group[1] = body_widget
+    menu.item_group:resetLayout()
+    if menu.content_group then menu.content_group:resetLayout() end
+end
+
+function M.remove_overlay_icons(menu)
+    if not menu or not menu.title_bar then return end
+    local tb = menu.title_bar
+    remove_from_overlap(tb, tb.left_button)
+    remove_from_overlap(tb, tb.right_button)
+    tb.has_left_icon = false
+    tb.has_right_icon = false
+end
+
+return M

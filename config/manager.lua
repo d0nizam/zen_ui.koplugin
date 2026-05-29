@@ -542,8 +542,9 @@ function M.load()
     if is_from_legacy then
         local g = rawget(_G, "G_reader_settings")
         if g then
-            g:delSetting(LEGACY_KEY)
-            pcall(g.flush, g)
+            -- TODO: Remove at launch
+            -- g:delSetting(LEGACY_KEY)
+            -- pcall(g.flush, g)
         end
     end
     _current_config = cfg

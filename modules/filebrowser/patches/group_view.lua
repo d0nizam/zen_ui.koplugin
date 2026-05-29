@@ -1,6 +1,6 @@
-local logger = require("logger")
 local ConfigManager = require("config/manager")
 local book_status = require("common/book_status")
+local StandalonePage = require("modules/filebrowser/patches/standalone_page")
 
 local M = {}
 
@@ -895,20 +895,6 @@ local function install_gesture_passthrough(menu)
     end
 end
 
--------------------------------------------------------------------------------
--- remove_from_overlap: remove widget from an OverlapGroup/widget list
--------------------------------------------------------------------------------
-local function remove_from_overlap(group, widget)
-    if not widget then return end
-    for i = #group, 1, -1 do
-        if rawequal(group[i], widget) then
-            table.remove(group, i)
-            return
-        end
-    end
-end
-
--------------------------------------------------------------------------------
 -- clean_nav: suppress back arrow, inject status bar row, set display mode
 -- back_callback: optional function for the status bar back chevron
 -------------------------------------------------------------------------------
@@ -916,59 +902,19 @@ local function clean_nav(menu, tab_label, back_callback)
     if not menu then return end
 
     menu._do_center_partial_rows = false
+    StandalonePage.hide_page_arrow(menu)
+    StandalonePage.suppress_page_info_tap(menu)
 
-    local arrow = menu.page_return_arrow
-    if arrow then
-        local Geom = require("ui/geometry")
-        arrow:hide()
-        arrow.show     = function() end
-        arrow.showHide = function() end
-        arrow.dimen    = Geom:new{ w = 0, h = 0 }
-    end
-
-    local tb = menu.title_bar
-    if not tb then
-        logger.warn("zen-authors-series: clean_nav: no title_bar")
-        return
-    end
-
-    local createStatusRow     = _zen_shared and _zen_shared.createStatusRow
-    local createStatusRowCB   = _zen_shared and _zen_shared.createStatusRowCustomBack
-    local repaintTitleBar     = _zen_shared and _zen_shared.repaintTitleBar
-
-    local function makeRow()
-        if back_callback and createStatusRowCB then
-            return createStatusRowCB(back_callback, tab_label)
-        elseif createStatusRow then
-            local FileManager = require("apps/filemanager/filemanager")
-            return createStatusRow(nil, FileManager.instance)
-        end
-    end
-
-    local status_row = makeRow()
-    if status_row and tb.title_group and #tb.title_group >= 2 then
-        tb.title_group[2] = status_row
-        tb.title_group:resetLayout()
-
-        remove_from_overlap(tb, tb.left_button)
-        remove_from_overlap(tb, tb.right_button)
-        tb.has_left_icon  = false
-        tb.has_right_icon = false
-
-        menu._zen_status_refresh = function()
-            local row = makeRow()
-            if row and tb.title_group and #tb.title_group >= 2 then
-                tb.title_group[2] = row
-                tb.title_group:resetLayout()
-                if repaintTitleBar then repaintTitleBar(tb) end
-            end
-        end
-    else
-        remove_from_overlap(tb, tb.left_button)
-        remove_from_overlap(tb, tb.right_button)
-        tb.has_left_icon  = false
-        tb.has_right_icon = false
-    end
+    local createStatusRow = _zen_shared and _zen_shared.createStatusRow
+    local createStatusRowCB = _zen_shared and _zen_shared.createStatusRowCustomBack
+    local repaintTitleBar = _zen_shared and _zen_shared.repaintTitleBar
+    StandalonePage.apply_status_row(menu, {
+        createStatusRow = createStatusRow,
+        createStatusRowCustomBack = createStatusRowCB,
+        repaintTitleBar = repaintTitleBar,
+        label = tab_label,
+        back_callback = back_callback,
+    })
 end
 
 -------------------------------------------------------------------------------
@@ -1451,8 +1397,6 @@ end
 -------------------------------------------------------------------------------
 local function showDetailView(group_item, injectNavbar, tab_id)
     local _ = require("gettext")
-    local Menu      = require("ui/widget/menu")
-    local TitleBar  = require("ui/widget/titlebar")
     local UIManager = require("ui/uimanager")
 
     local files      = group_item._zen_files or {}
@@ -1512,36 +1456,11 @@ local function showDetailView(group_item, injectNavbar, tab_id)
         table.insert(book_items, 1, { text = "\u{2B06} ..", is_go_up = true, mandatory = "" })
     end
 
-    -- Minimise TitleBar during Menu creation
-    local orig_tb_new = TitleBar.new
-    TitleBar.new = function(cls, t)
-        if type(t) == "table" then
-            t.subtitle                 = nil
-            t.subtitle_fullwidth       = nil
-            t.left_icon                = nil
-            t.left_icon_tap_callback   = nil
-            t.left_icon_hold_callback  = nil
-            t.right_icon               = nil
-            t.right_icon_tap_callback  = nil
-            t.right_icon_hold_callback = nil
-            t.close_callback           = nil
-            t.title_tap_callback       = nil
-            t.title_hold_callback      = nil
-            t.bottom_v_padding         = 0
-            t.title                    = " "
-        end
-        return orig_tb_new(cls, t)
-    end
-
-    local detail_menu = Menu:new{
-        name               = detail_name,
-        title              = group_name,
-        covers_fullscreen  = true,
-        is_borderless      = true,
-        is_popout          = false,
-        title_bar_fm_style = true,  -- picked up by zen_scroll_bar patch
-        item_table         = book_items,
-        onMenuSelect       = function(menu_self, item)
+    local detail_menu = StandalonePage.create_menu{
+        name = detail_name,
+        title = group_name,
+        item_table = book_items,
+        onMenuSelect = function(menu_self, item)
             if item.is_go_up then
                 if menu_self.close_callback then menu_self.close_callback()
                 else UIManager:close(menu_self) end
@@ -1558,27 +1477,20 @@ local function showDetailView(group_item, injectNavbar, tab_id)
                 end
             end
         end,
-        onMenuHold         = function(menu_self, item)
+        onMenuHold = function(menu_self, item)
             if not item.path then return end
             local FileManager = require("apps/filemanager/filemanager")
             local fm = FileManager.instance
             if fm and fm.file_chooser and fm.file_chooser.showFileDialog then
                 show_file_dialog_with_refresh(fm.file_chooser, menu_self, {
-                    path    = item.path,
+                    path = item.path,
                     is_file = true,
-                    text    = item.text,
+                    text = item.text,
                 })
             end
         end,
-        updateItems        = function(menu_self, ...) end,  -- prevent default pagination
     }
-    TitleBar.new = orig_tb_new
-
-    -- Suppress the invisible page-info tap target ("go to letter/page" dialog)
-    if detail_menu.page_info_text then
-        detail_menu.page_info_text.tap_input  = nil
-        detail_menu.page_info_text.hold_input = nil
-    end
+    StandalonePage.prepare_shell(detail_menu)
 
     -- Install same display mode as the library (mosaic/list/classic)
     local mode_type = setup_display_mode(detail_menu, false, tab_id)
@@ -1697,8 +1609,6 @@ end
 -------------------------------------------------------------------------------
 showGroupView = function(tab_id, injectNavbar, groups)
     local _ = require("gettext")
-    local Menu      = require("ui/widget/menu")
-    local TitleBar  = require("ui/widget/titlebar")
     local UIManager = require("ui/uimanager")
 
     local title
@@ -1712,36 +1622,11 @@ showGroupView = function(tab_id, injectNavbar, groups)
     local item_table = build_group_item_table(groups, tab_id)
     -- No up-folder at the root group list level.
 
-    -- Minimise TitleBar during Menu creation
-    local orig_tb_new = TitleBar.new
-    TitleBar.new = function(cls, t)
-        if type(t) == "table" then
-            t.subtitle                 = nil
-            t.subtitle_fullwidth       = nil
-            t.left_icon                = nil
-            t.left_icon_tap_callback   = nil
-            t.left_icon_hold_callback  = nil
-            t.right_icon               = nil
-            t.right_icon_tap_callback  = nil
-            t.right_icon_hold_callback = nil
-            t.close_callback           = nil
-            t.title_tap_callback       = nil
-            t.title_hold_callback      = nil
-            t.bottom_v_padding         = 0
-            t.title                    = " "
-        end
-        return orig_tb_new(cls, t)
-    end
-
-    local menu = Menu:new{
-        name               = tab_id,
-        title              = title,
-        covers_fullscreen  = true,
-        is_borderless      = true,
-        is_popout          = false,
-        title_bar_fm_style = true,  -- picked up by zen_scroll_bar patch
-        item_table         = item_table,
-        onMenuSelect       = function(menu_self, item)
+    local menu = StandalonePage.create_menu{
+        name = tab_id,
+        title = title,
+        item_table = item_table,
+        onMenuSelect = function(menu_self, item)
             if item.is_go_up then
                 if menu_self.close_callback then menu_self.close_callback()
                 else UIManager:close(menu_self) end
@@ -1751,33 +1636,26 @@ showGroupView = function(tab_id, injectNavbar, groups)
                 showDetailView(item, injectNavbar, tab_id)
             end
         end,
-        onMenuHold         = function(menu_self, item)
+        onMenuHold = function(menu_self, item)
             if item._zen_files then
                 local FileManager = require("apps/filemanager/filemanager")
                 local fm = FileManager.instance
                 if fm and fm.file_chooser and fm.file_chooser.showFileDialog then
                     fm.file_chooser:showFileDialog({
                         _zen_group_files = item._zen_files,
-                        _zen_group_name  = item.text,
-                        _zen_sort_cb     = function()
+                        _zen_group_name = item.text,
+                        _zen_sort_cb = function()
                             showDetailSortDialog(item.text, tab_id, nil, item._zen_files)
                         end,
-                        _zen_display_cb  = function()
+                        _zen_display_cb = function()
                             showDisplayModeDialog(menu_self, tab_id)
                         end,
                     })
                 end
             end
         end,
-        updateItems        = function(menu_self, ...) end,  -- prevent default pagination
     }
-    TitleBar.new = orig_tb_new
-
-    -- Suppress the invisible page-info tap target ("go to letter/page" dialog)
-    if menu.page_info_text then
-        menu.page_info_text.tap_input  = nil
-        menu.page_info_text.hold_input = nil
-    end
+    StandalonePage.prepare_shell(menu)
 
     -- Install display mode (mosaic/list) and set _zen_group_view sentinel
     local mode_type = setup_display_mode(menu, true, tab_id)
@@ -1946,8 +1824,6 @@ end
 -------------------------------------------------------------------------------
 function M.showTBRView(injectNavbar)
     local _          = require("gettext")
-    local Menu       = require("ui/widget/menu")
-    local TitleBar   = require("ui/widget/titlebar")
     local UIManager  = require("ui/uimanager")
 
     local ok, db = pcall(require, "common/db_bookinfo")
@@ -1990,41 +1866,16 @@ function M.showTBRView(injectNavbar)
         return items
     end
 
-    local orig_tb_new = TitleBar.new
-    TitleBar.new = function(cls, t)
-        if type(t) == "table" then
-            t.subtitle                 = nil
-            t.subtitle_fullwidth       = nil
-            t.left_icon                = nil
-            t.left_icon_tap_callback   = nil
-            t.left_icon_hold_callback  = nil
-            t.right_icon               = nil
-            t.right_icon_tap_callback  = nil
-            t.right_icon_hold_callback = nil
-            t.close_callback           = nil
-            t.title_tap_callback       = nil
-            t.title_hold_callback      = nil
-            t.bottom_v_padding         = 0
-            t.title                    = " "
-        end
-        return orig_tb_new(cls, t)
+    local items = buildItems(sorted_files)
+    if should_show_up_folder() then
+        table.insert(items, 1, { text = "\u{2B06} ..", is_go_up = true, mandatory = "" })
     end
 
-    local menu = Menu:new{
-        name               = "to_be_read",
-        title              = group_name,
-        covers_fullscreen  = true,
-        is_borderless      = true,
-        is_popout          = false,
-        title_bar_fm_style = true,
-        item_table         = (function()
-            local items = buildItems(sorted_files)
-            if should_show_up_folder() then
-                table.insert(items, 1, { text = "\u{2B06} ..", is_go_up = true, mandatory = "" })
-            end
-            return items
-        end)(),
-        onMenuSelect       = function(menu_self, item)
+    local menu = StandalonePage.create_menu{
+        name = "to_be_read",
+        title = group_name,
+        item_table = items,
+        onMenuSelect = function(menu_self, item)
             if item.is_go_up then
                 if menu_self.close_callback then menu_self.close_callback()
                 else UIManager:close(menu_self) end
@@ -2041,7 +1892,7 @@ function M.showTBRView(injectNavbar)
                 end
             end
         end,
-        onMenuHold         = function(menu_self, item)
+        onMenuHold = function(menu_self, item)
             if not item.path then return end
             local FileManager = require("apps/filemanager/filemanager")
             local fm = FileManager.instance
@@ -2053,15 +1904,8 @@ function M.showTBRView(injectNavbar)
                 })
             end
         end,
-        updateItems        = function(menu_self, ...) end,
     }
-    TitleBar.new = orig_tb_new
-
-    -- Suppress the invisible page-info tap target ("go to letter/page" dialog)
-    if menu.page_info_text then
-        menu.page_info_text.tap_input  = nil
-        menu.page_info_text.hold_input = nil
-    end
+    StandalonePage.prepare_shell(menu)
 
     -- Tag TBR as a real-book-list menu so _zen_update_impl in browser_folder_cover
     -- doesn't suppress covers the way it does for non-FM dialogs (e.g. screensaver picker).
