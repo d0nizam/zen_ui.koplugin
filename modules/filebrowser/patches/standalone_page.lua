@@ -1,8 +1,18 @@
 local Menu = require("ui/widget/menu")
 local TitleBar = require("ui/widget/titlebar")
 local Geom = require("ui/geometry")
+local ClockTimer = require("common/clock_timer")
 
 local M = {}
+
+local function refresh_bound_status_row(target)
+    if not target or not target._zen_status_refresh then return end
+    local UIManager = require("ui/uimanager")
+    local stack = UIManager._window_stack
+    local top = stack and stack[#stack]
+    if not top or top.widget ~= target then return end
+    target:_zen_status_refresh()
+end
 
 local function remove_from_overlap(group, widget)
     if not widget then return end
@@ -126,6 +136,9 @@ function M.apply_status_row(menu, params)
             if repaintTitleBar then repaintTitleBar(tb) end
         end
     end
+
+    menu._zen_status_clock_bound = true
+    ClockTimer.bind(menu, refresh_bound_status_row)
 end
 
 function M.mount_body(menu, body_widget)

@@ -16,6 +16,7 @@ local FEATURES = {
 
 local PATCH_MODULES = {
     coverbrowser_check = "modules/filebrowser/patches/coverbrowser_check",
+    coverbrowser_subprocess_compat = "modules/filebrowser/patches/coverbrowser_subprocess_compat",
     context_menu = "modules/filebrowser/patches/context_menu",
     browser_folder_sort = "modules/filebrowser/patches/browser_folder_sort",
     disable_modal_drag = "modules/filebrowser/patches/disable_modal_drag",
@@ -89,6 +90,11 @@ function M.init(logger, plugin)
     local coverbrowser_check_fn = load_patch("coverbrowser_check")
     if coverbrowser_check_fn then
         run_feature(logger, plugin, "coverbrowser_check", coverbrowser_check_fn)
+    end
+
+    local coverbrowser_subprocess_compat_fn = load_patch("coverbrowser_subprocess_compat")
+    if coverbrowser_subprocess_compat_fn then
+        run_feature(logger, plugin, "coverbrowser_subprocess_compat", coverbrowser_subprocess_compat_fn)
     end
 
     local disable_modal_drag_fn = load_patch("disable_modal_drag")

@@ -1,13 +1,14 @@
 local components = {
-    require("modules/filebrowser/patches/dashboard/components/featured_most_recent"),
-    require("modules/filebrowser/patches/dashboard/components/featured_reading_first"),
-    require("modules/filebrowser/patches/dashboard/components/featured_tbr_first"),
-    require("modules/filebrowser/patches/dashboard/components/stats_triplet"),
-    require("modules/filebrowser/patches/dashboard/components/reading_goals"),
-    require("modules/filebrowser/patches/dashboard/components/strip_to_be_read"),
-    require("modules/filebrowser/patches/dashboard/components/strip_reading_recent"),
-    require("modules/filebrowser/patches/dashboard/components/strip_recently_read"),
-    require("modules/filebrowser/patches/dashboard/components/quotes"),
+    require("modules/filebrowser/patches/dashboard/widgets/datetime"),
+    require("modules/filebrowser/patches/dashboard/widgets/featured_reading"),
+    require("modules/filebrowser/patches/dashboard/widgets/featured_tbr"),
+    require("modules/filebrowser/patches/dashboard/widgets/featured_recent"),
+    require("modules/filebrowser/patches/dashboard/widgets/stats_triplet"),
+    require("modules/filebrowser/patches/dashboard/widgets/reading_goals"),
+    require("modules/filebrowser/patches/dashboard/widgets/strip_reading"),
+    require("modules/filebrowser/patches/dashboard/widgets/strip_tbr"),
+    require("modules/filebrowser/patches/dashboard/widgets/strip_recent"),
+    require("modules/filebrowser/patches/dashboard/widgets/quotes"),
 }
 
 local by_id = {}

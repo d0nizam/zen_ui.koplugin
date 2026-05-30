@@ -8,6 +8,98 @@ local DBConn = require("common/db_connection")
 
 local StatsDB = {}
 
+local function get_db_page_set(conn, id_book, start_time)
+    local out = {}
+    if not conn or not id_book then return out end
+    local sql = string.format(
+        "SELECT DISTINCT page FROM page_stat WHERE id_book = %d AND start_time >= %d;",
+        id_book, start_time
+    )
+    local ok_exec, res = pcall(conn.exec, conn, sql)
+    if not ok_exec or type(res) ~= "table" then return out end
+    local pages = res.page or res[1]
+    if type(pages) ~= "table" then return out end
+    for i = 1, #pages do
+        out[tostring(pages[i])] = true
+    end
+    return out
+end
+
+local function get_live_page_turn_counts(conn, starts)
+    local counts = {
+        today_pages = 0,
+        week_pages = 0,
+        month_pages = 0,
+        year_pages = 0,
+    }
+    if type(starts) ~= "table" then return counts end
+
+    local ok_loader, PluginLoader = pcall(require, "pluginloader")
+    if not ok_loader or not PluginLoader or type(PluginLoader.getPluginInstance) ~= "function" then
+        return counts
+    end
+
+    local stats_plugin = PluginLoader:getPluginInstance("statistics")
+    if type(stats_plugin) ~= "table" then return counts end
+    if type(stats_plugin.isEnabled) == "function" and not stats_plugin:isEnabled() then
+        return counts
+    end
+
+    local id_book = tonumber(stats_plugin.id_curr_book)
+    local page_stat = stats_plugin.page_stat
+    if not id_book or type(page_stat) ~= "table" then return counts end
+
+    local existing_today = get_db_page_set(conn, id_book, starts.start_today)
+    local existing_week = get_db_page_set(conn, id_book, starts.period_begin)
+    local existing_month = get_db_page_set(conn, id_book, starts.start_month)
+    local existing_year = get_db_page_set(conn, id_book, starts.start_year)
+
+    local seen_today = {}
+    local seen_week = {}
+    local seen_month = {}
+    local seen_year = {}
+
+    for page, tuples in pairs(page_stat) do
+        if type(tuples) == "table" then
+            local page_key = tostring(page)
+            local in_today = false
+            local in_week = false
+            local in_month = false
+            local in_year = false
+
+            for i = 1, #tuples do
+                local tuple = tuples[i]
+                local ts = type(tuple) == "table" and tonumber(tuple[1]) or nil
+                if ts then
+                    if ts >= starts.start_year then in_year = true end
+                    if ts >= starts.start_month then in_month = true end
+                    if ts >= starts.period_begin then in_week = true end
+                    if ts >= starts.start_today then in_today = true end
+                end
+            end
+
+            if in_today and not existing_today[page_key] and not seen_today[page_key] then
+                seen_today[page_key] = true
+                counts.today_pages = counts.today_pages + 1
+            end
+            if in_week and not existing_week[page_key] and not seen_week[page_key] then
+                seen_week[page_key] = true
+                counts.week_pages = counts.week_pages + 1
+            end
+            if in_month and not existing_month[page_key] and not seen_month[page_key] then
+                seen_month[page_key] = true
+                counts.month_pages = counts.month_pages + 1
+            end
+            if in_year and not existing_year[page_key] and not seen_year[page_key] then
+                seen_year[page_key] = true
+                counts.year_pages = counts.year_pages + 1
+            end
+        end
+    end
+
+    return counts
+end
+
 -- Returns a stats table:
 -- {
 --   today_pages        number
@@ -63,8 +155,17 @@ function StatsDB.queryStats()
         -- Time boundaries
         local now_t = os.date("*t")
         local from_begin_day = now_t.hour * 3600 + now_t.min * 60 + now_t.sec
-        local start_today    = os.time() - from_begin_day
-        local period_begin   = os.time() - 6 * one_day - from_begin_day
+        local now_ts = os.time()
+        local start_today = now_ts - from_begin_day
+        local period_begin = now_ts - 6 * one_day - from_begin_day
+        local start_month = os.time({
+            year = now_t.year, month = now_t.month, day = 1,
+            hour = 0, min = 0, sec = 0,
+        })
+        local start_year = os.time({
+            year = now_t.year, month = 1, day = 1,
+            hour = 0, min = 0, sec = 0,
+        })
 
         -- Today
         local sql_today = [[
@@ -251,15 +352,6 @@ function StatsDB.queryStats()
                     "peak_month=", stats.peak_month_duration)
 
         -- ── Month and Year aggregates ─────────────────────────────────────────
-        local now_t_my = os.date("*t")
-        local start_month = os.time({
-            year = now_t_my.year, month = now_t_my.month, day = 1,
-            hour = 0, min = 0, sec = 0,
-        })
-        local start_year = os.time({
-            year = now_t_my.year, month = 1, day = 1,
-            hour = 0, min = 0, sec = 0,
-        })
 
         local sql_month_agg = [[
             SELECT count(*), sum(sum_duration)
@@ -304,6 +396,34 @@ function StatsDB.queryStats()
             "SELECT count(DISTINCT id_book) FROM page_stat_data WHERE start_time >= %d;",
             start_year))
         stats.books_this_year = ok_by and (tonumber(by_v) or 0) or 0
+
+        local live_counts = get_live_page_turn_counts(conn, {
+            start_today = start_today,
+            period_begin = period_begin,
+            start_month = start_month,
+            start_year = start_year,
+        })
+        if type(live_counts) == "table" then
+            stats.today_pages = (stats.today_pages or 0) + (tonumber(live_counts.today_pages) or 0)
+            stats.week_pages = (stats.week_pages or 0) + (tonumber(live_counts.week_pages) or 0)
+            stats.month_pages = (stats.month_pages or 0) + (tonumber(live_counts.month_pages) or 0)
+            stats.year_pages = (stats.year_pages or 0) + (tonumber(live_counts.year_pages) or 0)
+            if (live_counts.today_pages or 0) > 0
+                or (live_counts.week_pages or 0) > 0
+                or (live_counts.month_pages or 0) > 0
+                or (live_counts.year_pages or 0) > 0
+            then
+                logger.info("zen-ui db_stats: live page turns supplement:",
+                    "today=", live_counts.today_pages or 0,
+                    "week=", live_counts.week_pages or 0,
+                    "month=", live_counts.month_pages or 0,
+                    "year=", live_counts.year_pages or 0)
+            end
+        end
+
+        logger.info("zen-ui db_stats: adjusted pages totals:",
+            "today=", stats.today_pages,
+            "week=", stats.week_pages)
         logger.info("zen-ui db_stats: month_pages=", stats.month_pages,
                     "year_pages=", stats.year_pages,
                     "books_this_week=", stats.books_this_week,

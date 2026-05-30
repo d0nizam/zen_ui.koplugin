@@ -1,6 +1,8 @@
 local logger = require("logger")
 local ConfigManager = require("config/manager")
 local book_status = require("common/book_status")
+local Blitbuffer = require("ffi/blitbuffer")
+local QUOTES = require("common/dashboard_quotes")
 local Registry = require("modules/filebrowser/patches/dashboard/components/registry")
 local StandalonePage = require("modules/filebrowser/patches/standalone_page")
 
@@ -10,26 +12,76 @@ local _dashboard_menu = nil
 local _zen_shared = nil
 local _zen_plugin = nil
 
-local QUOTES = {
-    { text = "Read in order to live.", author = "Gustave Flaubert" },
-    { text = "A reader lives a thousand lives before he dies.", author = "George R.R. Martin" },
-    { text = "There is no friend as loyal as a book.", author = "Ernest Hemingway" },
-    { text = "Today a reader, tomorrow a leader.", author = "Margaret Fuller" },
-    { text = "Books are a uniquely portable magic.", author = "Stephen King" },
-    { text = "Reading is to the mind what exercise is to the body.", author = "Joseph Addison" },
-    { text = "One glance at a book and you hear the voice of another person.", author = "Carl Sagan" },
-    { text = "If you only read the books everyone else is reading, you can only think what everyone else is thinking.", author = "Haruki Murakami" },
-    { text = "No entertainment is so cheap as reading.", author = "Mary Wortley Montagu" },
-    { text = "To learn to read is to light a fire.", author = "Victor Hugo" },
-    { text = "Books are mirrors: you only see in them what you already have inside you.", author = "Carlos Ruiz Zafon" },
-    { text = "Reading gives us someplace to go when we have to stay where we are.", author = "Mason Cooley" },
+local DEFAULT_ROW_ORDER = {
+    "datetime",
+    "featured_recent",
+    "stats_triplet",
+    "strip_tbr",
 }
 
-local DEFAULT_ROW_ORDER = {
-    "featured_most_recent",
-    "stats_triplet",
-    "strip_to_be_read",
+local function copy_default_row_order()
+    local out = {}
+    for _i, id in ipairs(DEFAULT_ROW_ORDER) do
+        out[#out + 1] = id
+    end
+    return out
+end
+
+local MODULE_TITLES = {
+    datetime = "Today",
+    featured_reading = "Reading",
+    featured_tbr = "To be Read",
+    featured_recent = "Recently read",
+    reading_goals = "Reading goals",
+    strip_reading = "Reading",
+    strip_tbr = "To be Read",
+    strip_recent = "Recently read",
+    stats_triplet = "Reading stats",
+    quotes = "Quote",
 }
+
+local function normalize_order(order)
+    if order == "reverse" then return "reverse" end
+    return "default"
+end
+
+local function ensure_module_cfg(dcfg, module_id)
+    if type(dcfg.modules) ~= "table" then dcfg.modules = {} end
+    if type(dcfg.modules[module_id]) ~= "table" then dcfg.modules[module_id] = {} end
+    local mcfg = dcfg.modules[module_id]
+    if module_id == "datetime" then
+        mcfg.show_module_title = false
+    elseif mcfg.show_module_title == nil then
+        mcfg.show_module_title = false
+    end
+    return mcfg
+end
+
+local function ensure_featured_module_cfg(dcfg, module_id)
+    local mcfg = ensure_module_cfg(dcfg, module_id)
+    mcfg.order = normalize_order(mcfg.order)
+    if mcfg.show_description == nil then mcfg.show_description = true end
+    return mcfg
+end
+
+local function ensure_strip_module_cfg(dcfg, module_id)
+    local mcfg = ensure_module_cfg(dcfg, module_id)
+    mcfg.order = normalize_order(mcfg.order)
+    if type(mcfg.count) ~= "number" then mcfg.count = 5 end
+    if mcfg.count < 3 then mcfg.count = 3 end
+    if mcfg.count > 5 then mcfg.count = 5 end
+    if mcfg.show_strip_titles == nil then mcfg.show_strip_titles = false end
+    return mcfg
+end
+
+local function ensure_dashboard_widget_cfg(dcfg)
+    ensure_featured_module_cfg(dcfg, "featured_reading")
+    ensure_featured_module_cfg(dcfg, "featured_tbr")
+    ensure_featured_module_cfg(dcfg, "featured_recent")
+    ensure_strip_module_cfg(dcfg, "strip_reading")
+    ensure_strip_module_cfg(dcfg, "strip_tbr")
+    ensure_strip_module_cfg(dcfg, "strip_recent")
+end
 
 local function load_zen_config()
     if _zen_plugin and type(_zen_plugin.config) == "table" then
@@ -61,16 +113,44 @@ local function ensure_dashboard_cfg(cfg)
     if type(dcfg.rows) ~= "table" then dcfg.rows = {} end
     local rows = dcfg.rows
 
-    if type(rows.order) ~= "table" or #rows.order == 0 then
-        rows.order = { "featured_most_recent", "stats_triplet", "strip_to_be_read" }
+    if type(rows.order) ~= "table" then rows.order = {} end
+    local normalized_order = {}
+    local seen_order = {}
+    for _i, id in ipairs(rows.order) do
+        if Registry.get(id) and not seen_order[id] then
+            seen_order[id] = true
+            table.insert(normalized_order, id)
+        end
     end
-    if type(rows.enabled) ~= "table" then
-        rows.enabled = {
-            featured_most_recent = true,
-            stats_triplet = true,
-            strip_to_be_read = true,
-        }
+    if #normalized_order == 0 then
+        rows.order = copy_default_row_order()
+    else
+        rows.order = normalized_order
     end
+
+    if type(rows.enabled) ~= "table" then rows.enabled = {} end
+    local normalized_enabled = {}
+    local had_enabled = false
+    for key, val in pairs(rows.enabled) do
+        if Registry.get(key) and val == true then
+            normalized_enabled[key] = true
+            had_enabled = true
+        elseif Registry.get(key) and normalized_enabled[key] == nil then
+            normalized_enabled[key] = false
+        end
+    end
+    if not had_enabled then
+        normalized_enabled = {}
+        for _i, id in ipairs(DEFAULT_ROW_ORDER) do
+            normalized_enabled[id] = true
+        end
+    end
+    for _i, comp in ipairs(Registry.list()) do
+        if normalized_enabled[comp.id] == nil then
+            normalized_enabled[comp.id] = false
+        end
+    end
+    rows.enabled = normalized_enabled
     rows.max_rows = 5
 
     if type(dcfg.middle_stats_triplet) ~= "table" then
@@ -81,16 +161,24 @@ local function ensure_dashboard_cfg(cfg)
     if dcfg.goals.metric ~= "time" and dcfg.goals.metric ~= "pages" then
         dcfg.goals.metric = "pages"
     end
-    if type(dcfg.goals.daily_target) ~= "number" then dcfg.goals.daily_target = 30 end
-    if type(dcfg.goals.weekly_target) ~= "number" then dcfg.goals.weekly_target = 210 end
-
-    if type(dcfg.bottom_count) ~= "number" then dcfg.bottom_count = 5 end
-    if dcfg.bottom_count < 3 then dcfg.bottom_count = 3 end
-    if dcfg.bottom_count > 5 then dcfg.bottom_count = 5 end
+    if dcfg.goals.period ~= "weekly" and dcfg.goals.period ~= "daily" then
+        dcfg.goals.period = "daily"
+    end
+    if type(dcfg.goals.daily_pages_target) ~= "number" then dcfg.goals.daily_pages_target = 30 end
+    if type(dcfg.goals.weekly_pages_target) ~= "number" then dcfg.goals.weekly_pages_target = 210 end
+    if type(dcfg.goals.daily_time_target_min) ~= "number" then dcfg.goals.daily_time_target_min = 30 end
+    if type(dcfg.goals.weekly_time_target_min) ~= "number" then dcfg.goals.weekly_time_target_min = 210 end
 
     if type(dcfg.quotes) ~= "table" then dcfg.quotes = {} end
     if dcfg.quotes.show_author == nil then dcfg.quotes.show_author = true end
+
     if type(dcfg.quotes.manual_index) ~= "number" then dcfg.quotes.manual_index = 1 end
+
+    -- Per-widget dashboard settings.
+    for _i, comp in ipairs(Registry.list()) do
+        ensure_module_cfg(dcfg, comp.id)
+    end
+    ensure_dashboard_widget_cfg(dcfg)
 
     return dcfg
 end
@@ -157,6 +245,47 @@ local function build_data_provider(cfg, dcfg)
     local history_cached = nil
     local tbr_cached = nil
 
+    local function is_widget_visible(widget_id)
+        if type(widget_id) ~= "string" or widget_id == "" then return false end
+        local rows_cfg = dcfg and dcfg.rows or {}
+        local order = type(rows_cfg.order) == "table" and rows_cfg.order or DEFAULT_ROW_ORDER
+        local enabled = type(rows_cfg.enabled) == "table" and rows_cfg.enabled or {}
+        local max_rows = tonumber(rows_cfg.max_rows) or 5
+        if max_rows < 1 then max_rows = 1 end
+        if max_rows > 5 then max_rows = 5 end
+
+        local seen = {}
+        local shown = 0
+
+        local function try_mark(id)
+            if seen[id] then return false end
+            if enabled[id] ~= true then return false end
+            local comp = Registry.get(id)
+            if not comp then return false end
+            seen[id] = true
+            shown = shown + 1
+            return id == widget_id
+        end
+
+        for _i, id in ipairs(order) do
+            if try_mark(id) then return true end
+            if shown >= max_rows then return false end
+        end
+
+        for _i, comp in ipairs(Registry.list()) do
+            if try_mark(comp.id) then return true end
+            if shown >= max_rows then return false end
+        end
+
+        return false
+    end
+
+    local function featured_widget_for_source(source)
+        if source == "currently_reading" then return "featured_reading" end
+        if source == "to_be_read" then return "featured_tbr" end
+        return "featured_recent"
+    end
+
     local function get_stats()
         if stats_cached then return stats_cached end
         local ok_stats, StatsDB = pcall(require, "common/db_stats")
@@ -200,13 +329,14 @@ local function build_data_provider(cfg, dcfg)
     local function get_book(path)
         if not path then return nil end
         local ok_bim, BookInfoManager = pcall(require, "bookinfomanager")
-        local cover_bb, title, authors, pages
+        local cover_bb, title, authors, pages, description
         if ok_bim and BookInfoManager then
             local bi = BookInfoManager:getBookInfo(path, true)
             if bi then
                 title = bi.title
                 authors = bi.authors
                 pages = bi.pages
+                description = bi.description
                 if bi.cover_bb and bi.has_cover and bi.cover_fetched and not bi.ignore_cover then
                     cover_bb = bi.cover_bb:copy()
                 end
@@ -241,6 +371,7 @@ local function build_data_provider(cfg, dcfg)
             percent = pct or 0,
             status = status,
             pages = pages,
+            description = description,
         }
     end
 
@@ -301,7 +432,18 @@ local function build_data_provider(cfg, dcfg)
         tbr_cached = {}
         local ok_db, db = pcall(require, "common/db_bookinfo")
         if ok_db and db and type(db.getTBRBooks) == "function" then
-            tbr_cached = db.getTBRBooks() or {}
+            local raw_tbr = db.getTBRBooks() or {}
+            local normalized = {}
+            for _i, item in ipairs(raw_tbr) do
+                local path = item
+                if type(item) == "table" then
+                    path = item.path or item.file
+                end
+                if type(path) == "string" and path ~= "" then
+                    table.insert(normalized, path)
+                end
+            end
+            tbr_cached = normalized
             tbr_cached = sort_files_like_tbr(tbr_cached)
         end
         return tbr_cached
@@ -320,43 +462,109 @@ local function build_data_provider(cfg, dcfg)
         return out
     end
 
-    function provider:getFeaturedBook(source_key)
-        local path
-        if source_key == "reading_first" then
-            local paths = get_paths_by_status("reading", 1)
-            path = paths[1]
-        elseif source_key == "tbr_first" then
-            local paths = get_tbr_paths()
-            path = paths[1]
-        else
-            local hist = get_history()
-            path = hist[1]
+    local function append_unique_paths(dst, src, limit)
+        if type(src) ~= "table" then return end
+        local seen = {}
+        for _i, path in ipairs(dst) do
+            if type(path) == "string" and path ~= "" then
+                seen[path] = true
+            end
         end
+        for _i, path in ipairs(src) do
+            if type(path) == "string" and path ~= "" and not seen[path] then
+                seen[path] = true
+                table.insert(dst, path)
+                if #dst >= limit then break end
+            end
+        end
+    end
+
+    local function reverse_copy(paths)
+        local out = {}
+        for i = #paths, 1, -1 do
+            out[#out + 1] = paths[i]
+        end
+        return out
+    end
+
+    local function collect_paths_for_source(source_key, limit)
+        local source = source_key
+        if source ~= "currently_reading" and source ~= "to_be_read" then
+            source = "recently_read"
+        end
+        local lim = tonumber(limit) or 5000
+        if source == "currently_reading" then
+            return get_paths_by_status("reading", lim)
+        end
+        if source == "to_be_read" then
+            local tbr = get_tbr_paths()
+            local out = {}
+            for _i, path in ipairs(tbr) do
+                table.insert(out, path)
+                if #out >= lim then break end
+            end
+            return out
+        end
+        local hist = get_history()
+        local out = {}
+        for _i, path in ipairs(hist) do
+            table.insert(out, path)
+            if #out >= lim then break end
+        end
+        return out
+    end
+
+    function provider:getFeaturedBook(source_key, order_key)
+        local paths = collect_paths_for_source(source_key)
+        if normalize_order(order_key) == "reverse" then
+            paths = reverse_copy(paths)
+        end
+        local path = paths[1]
         return get_book(path)
     end
 
-    function provider:getBooksForStrip(source_key, count)
-        local paths = {}
-        if source_key == "reading_recent" then
-            paths = get_paths_by_status("reading", count)
-        elseif source_key == "to_be_read" then
-            local tbr = get_tbr_paths()
-            for _i, path in ipairs(tbr) do
-                table.insert(paths, path)
-                if #paths >= count then break end
+    function provider:getBooksForStrip(source_key, count, order_key)
+        local n = tonumber(count) or 5
+        if n < 1 then n = 1 end
+        local source = source_key
+        if source ~= "currently_reading" and source ~= "to_be_read" then
+            source = "recently_read"
+        end
+        local paths = collect_paths_for_source(source, n + 1)
+
+        if normalize_order(order_key) == "reverse" then
+            paths = reverse_copy(paths)
+        end
+
+        -- Keep strip distinct from featured only when that featured widget is visible.
+        local featured_widget_id = featured_widget_for_source(source)
+        local should_dedupe_featured = is_widget_visible(featured_widget_id)
+        if should_dedupe_featured and #paths > 0 then
+            local featured_path = paths[1]
+            if featured_path and featured_path ~= "" then
+                local filtered = {}
+                for _i, path in ipairs(paths) do
+                    if path ~= featured_path then
+                        filtered[#filtered + 1] = path
+                    end
+                end
+                paths = filtered
             end
-        else
-            local hist = get_history()
-            for _i, path in ipairs(hist) do
-                table.insert(paths, path)
-                if #paths >= count then break end
-            end
+        end
+
+        -- Keep strip density stable: when a source has too few items, backfill
+        -- with recent valid history so the row can still show 3-5 covers.
+        if source == "currently_reading" and #paths < n then
+            append_unique_paths(paths, get_history(), n)
         end
 
         local books = {}
         for _i, path in ipairs(paths) do
             local book = get_book(path)
-            if book then table.insert(books, book) end
+            if book then
+                table.insert(books, book)
+                if #books >= n then break end
+            end
         end
         return books
     end
@@ -389,64 +597,130 @@ local function build_data_provider(cfg, dcfg)
         end
     end
 
-    provider.stats = get_stats()
+    provider.stats = {}
+
+    function provider:refreshStats()
+        stats_cached = nil
+        self.stats = get_stats()
+        return self.stats
+    end
 
     return provider
 end
 
 local function compute_row_heights(rows, body_h)
     local specs = {}
-    local total_pref = 0
+    local total_min = 0
 
     for _i, comp in ipairs(rows) do
         local size = comp.size or {}
         local pref = tonumber(size.preferred) or 120
         local min_h = tonumber(size.min) or math.max(60, math.floor(pref * 0.7))
         local max_h = tonumber(size.max) or math.max(pref, min_h)
-        table.insert(specs, { pref = pref, min = min_h, max = max_h, h = pref })
-        total_pref = total_pref + pref
+        local id = comp.id or ""
+        table.insert(specs, {
+            id = id,
+            is_strip = id == "strip" or id:match("^strip_") ~= nil,
+            is_featured = id == "featured" or id:match("^featured_") ~= nil,
+            is_datetime = id == "datetime",
+            pref = pref,
+            min = min_h,
+            max = max_h,
+            h = pref,
+        })
+        total_min = total_min + min_h
     end
 
     if #specs == 0 then return specs end
+    if body_h < #specs then body_h = #specs end
 
-    if total_pref > body_h then
-        local scale = body_h / total_pref
+    if total_min > body_h then
+        -- When strict mins cannot fit, shrink proportionally so rows stay contained.
+        local scale = body_h / total_min
         local total = 0
         for _i, sp in ipairs(specs) do
-            sp.h = math.floor(sp.pref * scale)
-            if sp.h < sp.min then sp.h = sp.min end
-            if sp.h > sp.max then sp.h = sp.max end
+            sp.h = math.max(1, math.floor(sp.min * scale))
             total = total + sp.h
         end
-        local i = 1
-        while total > body_h and #specs > 0 do
-            local sp = specs[i]
-            if sp.h > sp.min then
-                sp.h = sp.h - 1
-                total = total - 1
-            end
-            i = i + 1
-            if i > #specs then i = 1 end
-        end
-    else
-        local total = 0
-        for _i, sp in ipairs(specs) do total = total + sp.h end
         local remaining = body_h - total
         local i = 1
         while remaining > 0 and #specs > 0 do
-            local sp = specs[i]
-            if sp.h < sp.max then
-                sp.h = sp.h + 1
-                remaining = remaining - 1
-            end
+            specs[i].h = specs[i].h + 1
+            remaining = remaining - 1
             i = i + 1
             if i > #specs then i = 1 end
-            if i == 1 then
-                local all_at_max = true
-                for _j, s in ipairs(specs) do
-                    if s.h < s.max then all_at_max = false; break end
+        end
+        return specs
+    end
+
+    local total = 0
+    for _i, sp in ipairs(specs) do
+        sp.h = sp.pref
+        if sp.h < sp.min then sp.h = sp.min end
+        if sp.h > sp.max then sp.h = sp.max end
+        total = total + sp.h
+    end
+
+    local function pick_shrink_candidate(strip_only)
+        local best_i = nil
+        local best_room = 0
+        for i, sp in ipairs(specs) do
+            if not strip_only or sp.is_strip then
+                local room = sp.h - sp.min
+                if room > best_room then
+                    best_room = room
+                    best_i = i
                 end
-                if all_at_max then break end
+            end
+        end
+        return best_i, best_room
+    end
+
+    while total > body_h do
+        local best_i, best_room = pick_shrink_candidate(true)
+        if not best_i or best_room <= 0 then
+            best_i, best_room = pick_shrink_candidate(false)
+        end
+        if not best_i or best_room <= 0 then break end
+        specs[best_i].h = specs[best_i].h - 1
+        total = total - 1
+    end
+
+    local function grow_matching(match_fn, allow_over_max)
+        local grew = false
+        for _i, sp in ipairs(specs) do
+            if total >= body_h then break end
+            if match_fn(sp) and (allow_over_max or sp.h < sp.max) then
+                sp.h = sp.h + 1
+                total = total + 1
+                grew = true
+            end
+        end
+        return grew
+    end
+
+    local function grow_over_max(sp)
+        if not sp then return false end
+        sp.h = sp.h + 1
+        total = total + 1
+        return true
+    end
+
+    while total < body_h do
+        local grew = grow_matching(function(sp) return sp.is_featured end, false)
+        if total >= body_h then break end
+        grew = grow_matching(function(sp) return sp.is_datetime end, false) or grew
+        if total >= body_h then break end
+        grew = grow_matching(function(sp)
+            return not sp.is_strip and not sp.is_featured and not sp.is_datetime
+        end, false) or grew
+        if total >= body_h then break end
+        grew = grow_matching(function(sp) return sp.is_strip end, false) or grew
+        if not grew then
+            -- Once all maxes are reached, prefer extra cover space over dead space.
+            if not grow_matching(function(sp) return sp.is_strip end, true)
+                    and not grow_over_max(specs[#specs]) then
+                break
             end
         end
     end
@@ -457,22 +731,56 @@ end
 local function build_dashboard_content(menu, cfg, dcfg, rows, data_provider)
     local Device = require("device")
     local Screen = Device.screen
+    local Geom = require("ui/geometry")
+    local HorizontalGroup = require("ui/widget/horizontalgroup")
+    local HorizontalSpan = require("ui/widget/horizontalspan")
     local VerticalGroup = require("ui/widget/verticalgroup")
     local VerticalSpan = require("ui/widget/verticalspan")
+    local TextWidget = require("ui/widget/textwidget")
+    local LeftContainer = require("ui/widget/container/leftcontainer")
     local FrameContainer = require("ui/widget/container/framecontainer")
     local Font = require("ui/font")
 
     local tb = menu.title_bar
     local tb_h = tb and tb:getSize().h or 0
-    local body_h = (menu.inner_dimen and menu.inner_dimen.h or menu.dimen.h) - tb_h
-    if body_h < 1 then body_h = Screen:getHeight() - tb_h end
+    local menu_h = menu.height or (menu.inner_dimen and menu.inner_dimen.h or menu.dimen.h)
+    local body_h = menu_h - tb_h
+    local navbar_h = tonumber(rawget(_G, "__ZEN_UI_NAVBAR_HEIGHT")) or 0
+    local hard_body_h = Screen:getHeight() - tb_h - navbar_h
+    if hard_body_h < 1 then hard_body_h = Screen:getHeight() - tb_h end
+    if body_h < 1 then body_h = hard_body_h end
+    if body_h > hard_body_h then body_h = hard_body_h end
     local body_w = menu.inner_dimen and menu.inner_dimen.w or Screen:getWidth()
+    local side_pad = Screen:scaleBySize(10) -- keep dashboard body gutters aligned with status bar edge padding
+    if side_pad * 2 >= body_w then
+        side_pad = math.max(0, math.floor(body_w * 0.08))
+    end
+    local content_w = math.max(1, body_w - side_pad * 2)
+    local right_pad = math.max(0, body_w - content_w - side_pad)
+    local page_pad = math.max(2, Screen:scaleBySize(4))
+    if page_pad * 2 >= body_h then
+        page_pad = math.max(0, math.floor((body_h - 1) / 2))
+    end
+    local layout_h = math.max(1, body_h - page_pad * 2)
+    local row_gap = 0
+    if #rows > 1 then
+        local default_gap = math.max(2, Screen:scaleBySize(4))
+        local max_gap_total = math.max(#rows - 1, math.floor(layout_h * 0.12))
+        row_gap = math.floor(max_gap_total / (#rows - 1))
+        if row_gap < 1 then row_gap = 1 end
+        if row_gap > default_gap then row_gap = default_gap end
+    end
+    local gaps_h = row_gap * math.max(0, #rows - 1)
+    local rows_h_budget = layout_h - gaps_h
+    if rows_h_budget < #rows then rows_h_budget = math.max(1, layout_h) end
 
-    local row_heights = compute_row_heights(rows, body_h)
+    local row_heights = compute_row_heights(rows, rows_h_budget)
 
     local face_title = Font:getFace("smallinfofont", Screen:scaleBySize(24))
     local face_value = Font:getFace("smallinfofont", Screen:scaleBySize(20))
     local face_label = Font:getFace("smallinfofont", Screen:scaleBySize(16))
+    local row_title_face = Font:getFace("smallinfofont", Screen:scaleBySize(13))
+    local row_title_gap = Screen:scaleBySize(3)
 
     local FileManager = require("apps/filemanager/filemanager")
     local filemanagerutil = require("apps/filemanager/filemanagerutil")
@@ -489,32 +797,83 @@ local function build_dashboard_content(menu, cfg, dcfg, rows, data_provider)
 
     local children = { align = "left" }
     local used_h = 0
+    if page_pad > 0 then
+        table.insert(children, VerticalSpan:new{ width = page_pad })
+        used_h = used_h + page_pad
+    end
+
+    local function title_for_component(comp_id)
+        return MODULE_TITLES[comp_id]
+    end
 
     for i, comp in ipairs(rows) do
         local h = row_heights[i] and row_heights[i].h or 120
+        local module_cfg = type(dcfg.modules) == "table" and dcfg.modules[comp.id] or nil
+        local show_row_title = not (module_cfg and module_cfg.show_module_title == false)
+        local row_title = title_for_component(comp.id) or comp.title or comp.label or ""
+        local title_h = 0
+        local title_widget = nil
+        if show_row_title and row_title ~= "" then
+            title_widget = TextWidget:new{ text = row_title, face = row_title_face, bold = true }
+            title_h = title_widget:getSize().h
+        end
+        local content_h = h
+        local title_gap_h = title_h > 0 and row_title_gap or 0
+        if title_widget then
+            local reserved = title_h + title_gap_h
+            if h > reserved + 20 then
+                content_h = h - reserved
+            else
+                -- Hide row title when space is constrained, so widget content fits.
+                title_widget = nil
+                title_h = 0
+                title_gap_h = 0
+                content_h = h
+            end
+        end
+        if content_h < 1 then content_h = 1 end
         local row_ctx = {
-            width = body_w,
-            height = h,
+            width = content_w,
+            height = content_h,
             config = dcfg,
             data = data_provider,
             openBook = open_book,
             face_title = face_title,
             face_value = face_value,
             face_label = face_label,
+            component_id = comp.id,
+            module_cfg = module_cfg,
+            is_first_row = i == 1,
         }
         local ok_widget, widget = pcall(comp.build, row_ctx)
         if ok_widget and widget then
+            local final_widget = widget
+            if title_widget then
+                final_widget = VerticalGroup:new{
+                    align = "left",
+                    LeftContainer:new{
+                        dimen = Geom:new{ w = content_w, h = title_h },
+                        title_widget,
+                    },
+                    VerticalSpan:new{ width = title_gap_h },
+                    widget,
+                }
+            end
             table.insert(children, FrameContainer:new{
-                width = body_w,
+                width = content_w,
                 height = h,
                 padding = 0,
                 bordersize = 0,
-                background = 0,
-                widget,
+                background = Blitbuffer.COLOR_WHITE,
+                final_widget,
             })
             used_h = used_h + h
         else
             logger.warn("zen-ui dashboard: failed to build component:", comp.id, widget)
+        end
+        if row_gap > 0 and i < #rows then
+            table.insert(children, VerticalSpan:new{ width = row_gap })
+            used_h = used_h + row_gap
         end
     end
 
@@ -522,7 +881,18 @@ local function build_dashboard_content(menu, cfg, dcfg, rows, data_provider)
         table.insert(children, VerticalSpan:new{ width = body_h - used_h })
     end
 
-    return VerticalGroup:new(children)
+    return HorizontalGroup:new{
+        HorizontalSpan:new{ width = side_pad },
+        FrameContainer:new{
+            width = content_w,
+            height = body_h,
+            padding = 0,
+            bordersize = 0,
+            background = Blitbuffer.COLOR_WHITE,
+            VerticalGroup:new(children),
+        },
+        HorizontalSpan:new{ width = right_pad },
+    }
 end
 
 function M.showDashboardView(injectNavbar)
@@ -550,16 +920,34 @@ function M.showDashboardView(injectNavbar)
     local rows = resolve_rows(dcfg)
     local data_provider = build_data_provider(cfg, dcfg)
 
-    local function rebuild()
+    local function rebuild(refresh_stats)
+        if refresh_stats and data_provider and type(data_provider.refreshStats) == "function" then
+            data_provider:refreshStats()
+        end
         local content = build_dashboard_content(menu, cfg, dcfg, rows, data_provider)
         StandalonePage.mount_body(menu, content)
         UIManager:setDirty(menu, "ui")
     end
 
-    function menu:_dashboard_rebuild()
+    local status_refresh = menu._zen_status_refresh
+    menu._zen_status_refresh = function(self, ...)
+        local target = type(self) == "table" and self or menu
+        if status_refresh then
+            status_refresh(target, ...)
+        end
+        for _i, comp in ipairs(rows) do
+            if comp.id == "datetime" then
+                if target and target._dashboard_rebuild then
+                    target:_dashboard_rebuild()
+                end
+                break
+            end
+        end
+    end
+
+    function menu:_dashboard_rebuild(refresh_stats)
         rows = resolve_rows(dcfg)
-        data_provider = build_data_provider(cfg, dcfg)
-        rebuild()
+        rebuild(refresh_stats == true)
     end
 
     menu.close_callback = function()
@@ -575,7 +963,7 @@ function M.showDashboardView(injectNavbar)
 
     UIManager:show(menu)
     UIManager:nextTick(function()
-        rebuild()
+        rebuild(true)
         if menu._zen_status_refresh then
             menu:_zen_status_refresh()
         end
@@ -584,6 +972,14 @@ end
 
 function M.getActivePage()
     return _dashboard_menu and (_dashboard_menu.page or 1)
+end
+
+function M.rebuildActive()
+    if _dashboard_menu and _dashboard_menu._dashboard_rebuild then
+        _dashboard_menu:_dashboard_rebuild()
+        return true
+    end
+    return false
 end
 
 function M.closeAll()

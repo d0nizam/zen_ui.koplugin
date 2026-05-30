@@ -75,6 +75,7 @@ local function apply_navbar()
         show_labels = true,
         books_label = "",  -- empty = auto-translated "Library"
         dashboard_label = "Reading",
+        default_tab = "books",
         manga_action = "rakuyomi",
         manga_folder = "",
         news_action = "quickrss",
@@ -109,8 +110,8 @@ local function apply_navbar()
             config.tab_order = config_default.tab_order
         else
             local order_set = {}
-            for _, v in ipairs(config.tab_order) do order_set[v] = true end
-            for _, v in ipairs(config_default.tab_order) do
+            for _i, v in ipairs(config.tab_order) do order_set[v] = true end
+            for _i, v in ipairs(config_default.tab_order) do
                 if not order_set[v] then
                     table.insert(config.tab_order, v)
                 end
@@ -119,7 +120,7 @@ local function apply_navbar()
         -- Add custom tab IDs to tab_order if not already present
         if type(config.custom_tabs) == "table" then
             local ct_order_set = {}
-            for _, v in ipairs(config.tab_order) do ct_order_set[v] = true end
+            for _i, v in ipairs(config.tab_order) do ct_order_set[v] = true end
             for _i, ct in ipairs(config.custom_tabs) do
                 if type(ct.id) == "string" and not ct_order_set[ct.id] then
                     table.insert(config.tab_order, ct.id)
@@ -243,7 +244,7 @@ local function apply_navbar()
     }
 
     local tabs_by_id = {}
-    for _, tab in ipairs(tabs) do
+    for _i, tab in ipairs(tabs) do
         tabs_by_id[tab.id] = tab
     end
 
@@ -504,6 +505,58 @@ local function apply_navbar()
         menu = onTabMenu,
     }
 
+    local default_tab_whitelist = {
+        books = true,
+        manga = true,
+        news = true,
+        history = true,
+        favorites = true,
+        collections = true,
+        authors = true,
+        series = true,
+        tags = true,
+        to_be_read = true,
+        dashboard = true,
+    }
+
+    local function is_tab_enabled(tab_id)
+        if tab_id == "books" then return true end
+        if tab_id:sub(1, 3) == "ct_" then
+            return config.show_tabs[tab_id] == true
+        end
+        return config.show_tabs[tab_id] == true
+    end
+
+    local function resolve_default_tab()
+        local tab_id = config.default_tab
+        if type(tab_id) ~= "string" or tab_id == "" then
+            return "books"
+        end
+        if tab_id:sub(1, 3) == "ct_" then
+            if tab_callbacks[tab_id] and is_tab_enabled(tab_id) then
+                return tab_id
+            end
+            return "books"
+        end
+        if not default_tab_whitelist[tab_id] then
+            return "books"
+        end
+        if tab_callbacks[tab_id] and is_tab_enabled(tab_id) then
+            return tab_id
+        end
+        return "books"
+    end
+
+    local function open_default_tab()
+        local tab_id = resolve_default_tab()
+        setActiveTab(tab_id)
+        local cb = tab_callbacks[tab_id]
+        if cb then cb() end
+        return tab_id
+    end
+
+    active_tab = resolve_default_tab()
+
     -- Custom tabs are synced dynamically in createNavBar() so they appear immediately
     -- after being added without needing a full patch re-apply.
 
@@ -541,7 +594,7 @@ local function apply_navbar()
         end
         local pen_x = 0
         local baseline = self.forced_baseline or self._baseline_h
-        for _, xglyph in ipairs(self._xshaping) do
+        for _i, xglyph in ipairs(self._xshaping) do
             if pen_x >= text_width then break end
             local face = self.face.getFallbackFont(xglyph.font_num)
             local glyph = RenderText:getGlyphByIndex(face, xglyph.glyph, self.bold)
@@ -593,10 +646,10 @@ local function apply_navbar()
     -- Returns the largest size from navbar_font_size_steps where every label fits within max_w.
     -- Uses the bold face as the worst-case width so all tabs stay at the same size.
     local function getSharedFontSize(labels, max_w)
-        for _, size in ipairs(navbar_font_size_steps) do
+        for _i, size in ipairs(navbar_font_size_steps) do
             local face = library_font.getFace(size)
             local all_fit = true
-            for _, text in ipairs(labels) do
+            for _j, text in ipairs(labels) do
                 local probe = TextWidget:new{ text = text, face = face, bold = true }
                 local fits = probe:getSize().w <= max_w
                 probe:free()
@@ -754,7 +807,7 @@ local function apply_navbar()
 
     local function getVisibleTabs()
         local visible = {}
-        for _, id in ipairs(config.tab_order) do
+        for _i, id in ipairs(config.tab_order) do
             if (id == "books" or config.show_tabs[id]) and tabs_by_id[id] then
                 table.insert(visible, tabs_by_id[id])
                 if #visible >= navbar_max_tabs then break end
@@ -839,7 +892,7 @@ local function apply_navbar()
 
         -- Compute one font size that fits all labels so every tab uses the same size
         local tab_labels = {}
-        for _, tab in ipairs(visible_tabs) do
+        for _i, tab in ipairs(visible_tabs) do
             table.insert(tab_labels, tab.label)
         end
         local shared_font_size = getSharedFontSize(tab_labels, label_max_w)
@@ -964,12 +1017,17 @@ local function apply_navbar()
 
     getNavbarHeight = function()
         if not is_navbar_enabled() then
+            _G.__ZEN_UI_NAVBAR_HEIGHT = 0
             return 0
         end
         local nb = createNavBar()
-        if not nb then return 0 end
+        if not nb then
+            _G.__ZEN_UI_NAVBAR_HEIGHT = 0
+            return 0
+        end
         local h = nb:getSize().h
         nb:free()
+        _G.__ZEN_UI_NAVBAR_HEIGHT = h
         return h
     end
 
@@ -1788,6 +1846,23 @@ local function apply_navbar()
     -- *above* fm in the window stack, so _repaint starts from the overlay (topmost
     -- covers_fullscreen) and never paints the FM books view at all -- no flash, no artifacts.
     local orig_showFiles = FileManager.showFiles
+    local function maybe_open_startup_default_tab(fm)
+        if not fm or fm._zen_default_tab_bootstrapped then return end
+        local stack = UIManager._window_stack
+        local top = stack and stack[#stack]
+        local top_widget = top and top.widget
+        if top_widget ~= fm and top_widget ~= fm.show_parent then
+            return
+        end
+        fm._zen_default_tab_bootstrapped = true
+        if resolve_default_tab() == "books" then return end
+        UIManager:nextTick(function()
+            if FileManager.instance == fm then
+                open_default_tab()
+            end
+        end)
+    end
+
     function FileManager:showFiles(path, focused_file, selected_files)
         -- When restore is disabled, open at library root immediately (no double render).
         local effective_focused = is_restore_enabled() and focused_file or nil
@@ -1802,12 +1877,22 @@ local function apply_navbar()
             end
         end
         orig_showFiles(self, path, effective_focused, selected_files)
+        if rawget(_G, "__ZEN_UI_FORCE_DEFAULT_LIBRARY_TAB") then
+            _G.__ZEN_UI_FORCE_DEFAULT_LIBRARY_TAB = nil
+            _G.__ZEN_UI_LIBRARY_STATE = nil
+            open_default_tab()
+            return
+        end
         local state = rawget(_G, "__ZEN_UI_LIBRARY_STATE")
         if not is_restore_enabled() then
             _G.__ZEN_UI_LIBRARY_STATE = nil
+            maybe_open_startup_default_tab(self)
             return
         end
-        if not state or not state.tab or not tab_callbacks[state.tab] then return end
+        if not state or not state.tab or not tab_callbacks[state.tab] then
+            maybe_open_startup_default_tab(self)
+            return
+        end
         local gv = zen_plugin._zen_shared and zen_plugin._zen_shared.group_view
         -- onPathChanged inside orig_setupLayout may have reset active_tab to "books";
         -- restore it now so onShowingReader saves the right tab on the next book open.
@@ -2003,11 +2088,14 @@ local function apply_navbar()
         if fm then
             injectNavbar(fm)
             UIManager:setDirty(fm, "ui")
+            maybe_open_startup_default_tab(fm)
         end
     end)
 
     -- Expose a reinject function for external callers (e.g. quickstart on_close).
     -- Allows main.lua to rebuild the navbar after quickstart changes tab config.
+    _G.__ZEN_UI_NAVBAR_OPEN_DEFAULT_TAB = open_default_tab
+
     _G.__ZEN_UI_REINJECT_FM_NAVBAR = function()
         local fm = FileManager.instance
         if fm then

@@ -456,12 +456,16 @@ function ZenUI:init()
                         ui:handleEvent(require("ui/event"):new("CloseConfigMenu"))
                         ui:onClose()
                         if type(ui.showFileManager) == "function" then
+                            _G.__ZEN_UI_FORCE_DEFAULT_LIBRARY_TAB = true
                             ui:showFileManager(file)
                         end
                     else
                         local fm = require("apps/filemanager/filemanager").instance
                         if fm then require("common/utils").closeWidgetsAbove(fm) end
-                        if not restore then
+                        local open_default = rawget(_G, "__ZEN_UI_NAVBAR_OPEN_DEFAULT_TAB")
+                        if type(open_default) == "function" then
+                            open_default()
+                        elseif not restore then
                             -- Go to library root (page 1), ignoring current folder depth.
                             local home_dir = require("common/paths").getHomeDir()
                             if fm and fm.file_chooser and home_dir then

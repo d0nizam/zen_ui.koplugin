@@ -28,6 +28,10 @@ function M.build(ctx)
         end
     end
 
+    if type(config.navbar.default_tab) ~= "string" or config.navbar.default_tab == "" then
+        config.navbar.default_tab = "books"
+    end
+
     -- -------------------------------------------------------------------------
     -- Color helpers
     -- -------------------------------------------------------------------------
@@ -80,6 +84,31 @@ function M.build(ctx)
         { id = "page_right",  text = _("Next page")     },
         { id = "menu",        text = _("Menu")          },
     }
+
+    local default_tab_ids = {
+        "books", "manga", "news", "history", "favorites",
+        "collections", "authors", "series", "tags", "to_be_read", "dashboard",
+    }
+
+    local tab_text_by_id = {}
+    for i, tab in ipairs(navbar_tab_items) do
+        tab_text_by_id[tab.id] = tab.text
+    end
+
+    local function get_default_tab_label(tab_id)
+        if tab_text_by_id[tab_id] then
+            return tab_text_by_id[tab_id]
+        end
+        if type(config.navbar.custom_tabs) == "table" then
+            for i, ct in ipairs(config.navbar.custom_tabs) do
+                if ct.id == tab_id then
+                    if ct.label and ct.label ~= "" then return ct.label end
+                    return _("Custom")
+                end
+            end
+        end
+        return _("Library")
+    end
 
     local navbar_max_tabs = 7
 
@@ -377,6 +406,49 @@ function M.build(ctx)
                                     save_and_apply_navbar()
                                 end,
                             })
+                        end,
+                    },
+                    {
+                        text_func = function()
+                            local current = config.navbar.default_tab or "books"
+                            return _("Default tab: ") .. get_default_tab_label(current)
+                        end,
+                        keep_menu_open = true,
+                        sub_item_table_func = function()
+                            local items = {}
+                            for i, tab_id in ipairs(default_tab_ids) do
+                                local tid = tab_id
+                                local label = get_default_tab_label(tid)
+                                items[#items + 1] = {
+                                    text = label,
+                                    radio = true,
+                                    checked_func = function()
+                                        return (config.navbar.default_tab or "books") == tid
+                                    end,
+                                    callback = function()
+                                        config.navbar.default_tab = tid
+                                        save_and_apply_navbar()
+                                    end,
+                                }
+                            end
+                            if type(config.navbar.custom_tabs) == "table" then
+                                for i, ct in ipairs(config.navbar.custom_tabs) do
+                                    local tid = ct.id
+                                    local label = get_default_tab_label(tid)
+                                    items[#items + 1] = {
+                                        text = label,
+                                        radio = true,
+                                        checked_func = function()
+                                            return (config.navbar.default_tab or "books") == tid
+                                        end,
+                                        callback = function()
+                                            config.navbar.default_tab = tid
+                                            save_and_apply_navbar()
+                                        end,
+                                    }
+                                end
+                            end
+                            return items
                         end,
                     },
                     {

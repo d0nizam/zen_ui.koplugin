@@ -29,7 +29,7 @@ local FIELD_MAP = {
 
 return {
     id = "stats_triplet",
-    label = "Stats triplet",
+    label = "Reading stats widget",
     size = { preferred = 130, min = 110, max = 200 },
     build = function(ctx)
         local width = ctx.width
