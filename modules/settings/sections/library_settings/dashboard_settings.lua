@@ -10,13 +10,13 @@ local M = {}
 local DEFAULT_ORDER = {
     "datetime",
     "featured_recent",
-    "stats_triplet",
-    "strip_tbr",
     "featured_custom",
     "featured_tbr",
-    "strip_recent",
+    "stats_triplet",
     "reading_goals",
+    "strip_recent",
     "strip_custom",
+    "strip_tbr",
     "quotes",
 }
 
@@ -77,43 +77,15 @@ local function ensure_strip_cfg(dcfg, module_id)
     return mcfg
 end
 
-local function migrate_custom_widget_ids(dcfg)
-    if type(dcfg.rows) == "table" and type(dcfg.rows.order) == "table" then
-        for _i, id in ipairs(dcfg.rows.order) do
-            if id == "featured_reading" then
-                dcfg.rows.order[_i] = "featured_custom"
-            elseif id == "strip_reading" then
-                dcfg.rows.order[_i] = "strip_custom"
-            end
-        end
-    end
-    if type(dcfg.rows) == "table" and type(dcfg.rows.enabled) == "table" then
-        if dcfg.rows.enabled.featured_custom == nil then
-            dcfg.rows.enabled.featured_custom = dcfg.rows.enabled.featured_reading
-        end
-        if dcfg.rows.enabled.strip_custom == nil then
-            dcfg.rows.enabled.strip_custom = dcfg.rows.enabled.strip_reading
-        end
-        dcfg.rows.enabled.featured_reading = nil
-        dcfg.rows.enabled.strip_reading = nil
-    end
-    if type(dcfg.modules) == "table" then
-        if type(dcfg.modules.featured_custom) ~= "table" and type(dcfg.modules.featured_reading) == "table" then
-            dcfg.modules.featured_custom = dcfg.modules.featured_reading
-        end
-        if type(dcfg.modules.strip_custom) ~= "table" and type(dcfg.modules.strip_reading) == "table" then
-            dcfg.modules.strip_custom = dcfg.modules.strip_reading
-        end
-        dcfg.modules.featured_reading = nil
-        dcfg.modules.strip_reading = nil
-    end
-end
-
 local function ensure_dashboard_widget_cfg(dcfg)
     local featured_custom = ensure_featured_cfg(dcfg, "featured_custom")
     if type(featured_custom.path) ~= "string" then featured_custom.path = nil end
     ensure_featured_cfg(dcfg, "featured_tbr")
     ensure_featured_cfg(dcfg, "featured_recent")
+    local stats_triplet = ensure_module_cfg(dcfg, "stats_triplet")
+    if stats_triplet.stat_style ~= "outline" and stats_triplet.stat_style ~= "none" then
+        stats_triplet.stat_style = "divider"
+    end
     local strip_custom = ensure_strip_cfg(dcfg, "strip_custom")
     if type(strip_custom.paths) ~= "table" then strip_custom.paths = {} end
     ensure_strip_cfg(dcfg, "strip_tbr")
@@ -125,7 +97,6 @@ local function ensure_cfg(config)
     if type(config.group_view.dashboard_page) ~= "table" then config.group_view.dashboard_page = {} end
     local dcfg = config.group_view.dashboard_page
     DashboardPresets.ensurePresetState(dcfg)
-    migrate_custom_widget_ids(dcfg)
 
     if type(dcfg.rows) ~= "table" then dcfg.rows = {} end
     if type(dcfg.rows.order) ~= "table" then dcfg.rows.order = {} end
@@ -219,14 +190,14 @@ local function sort_order_with_defaults(order)
         end
     end
 
-    for _i, id in ipairs(ids) do
+    for _i, id in ipairs(DEFAULT_ORDER) do
         if not seen[id] then
             table.insert(out, id)
             seen[id] = true
         end
     end
 
-    for _i, id in ipairs(DEFAULT_ORDER) do
+    for _i, id in ipairs(ids) do
         if Registry.get(id) and not seen[id] then
             table.insert(out, id)
             seen[id] = true
@@ -831,6 +802,44 @@ function M.build(ctx)
                 stats_cfg.show_module_title = stats_cfg.show_module_title ~= true
                 save_dashboard("reinit")
             end,
+        },
+        {
+            text = _("Stat separators"),
+            sub_item_table = {
+                {
+                    text = _("Dividing lines"),
+                    radio = true,
+                    checked_func = function()
+                        return stats_cfg.stat_style ~= "outline" and stats_cfg.stat_style ~= "none"
+                    end,
+                    callback = function()
+                        stats_cfg.stat_style = "divider"
+                        save_dashboard("reinit")
+                    end,
+                },
+                {
+                    text = _("Outlined boxes"),
+                    radio = true,
+                    checked_func = function()
+                        return stats_cfg.stat_style == "outline"
+                    end,
+                    callback = function()
+                        stats_cfg.stat_style = "outline"
+                        save_dashboard("reinit")
+                    end,
+                },
+                {
+                    text = _("None"),
+                    radio = true,
+                    checked_func = function()
+                        return stats_cfg.stat_style == "none"
+                    end,
+                    callback = function()
+                        stats_cfg.stat_style = "none"
+                        save_dashboard("reinit")
+                    end,
+                },
+            },
         },
     }
     for slot = 1, 3 do

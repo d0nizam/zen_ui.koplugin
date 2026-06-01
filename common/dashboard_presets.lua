@@ -9,13 +9,13 @@ local DEFAULT_DASHBOARD_PAGE = {
         order = {
             "datetime",
             "featured_recent",
-            "stats_triplet",
-            "strip_tbr",
             "featured_custom",
             "featured_tbr",
-            "strip_recent",
+            "stats_triplet",
             "reading_goals",
+            "strip_recent",
             "strip_custom",
+            "strip_tbr",
             "quotes",
         },
         enabled = {
@@ -73,6 +73,7 @@ local DEFAULT_DASHBOARD_PAGE = {
             show_module_title = false,
         },
         stats_triplet = {
+            stat_style = "divider",
             show_module_title = false,
         },
         strip_custom = {

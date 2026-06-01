@@ -16,13 +16,13 @@ local _zen_plugin = nil
 local DEFAULT_ROW_ORDER = {
     "datetime",
     "featured_recent",
-    "stats_triplet",
-    "strip_tbr",
     "featured_custom",
     "featured_tbr",
-    "strip_recent",
+    "stats_triplet",
     "reading_goals",
+    "strip_recent",
     "strip_custom",
+    "strip_tbr",
     "quotes",
 }
 
@@ -96,43 +96,15 @@ local function ensure_strip_module_cfg(dcfg, module_id)
     return mcfg
 end
 
-local function migrate_custom_widget_ids(dcfg)
-    if type(dcfg.rows) == "table" and type(dcfg.rows.order) == "table" then
-        for _i, id in ipairs(dcfg.rows.order) do
-            if id == "featured_reading" then
-                dcfg.rows.order[_i] = "featured_custom"
-            elseif id == "strip_reading" then
-                dcfg.rows.order[_i] = "strip_custom"
-            end
-        end
-    end
-    if type(dcfg.rows) == "table" and type(dcfg.rows.enabled) == "table" then
-        if dcfg.rows.enabled.featured_custom == nil then
-            dcfg.rows.enabled.featured_custom = dcfg.rows.enabled.featured_reading
-        end
-        if dcfg.rows.enabled.strip_custom == nil then
-            dcfg.rows.enabled.strip_custom = dcfg.rows.enabled.strip_reading
-        end
-        dcfg.rows.enabled.featured_reading = nil
-        dcfg.rows.enabled.strip_reading = nil
-    end
-    if type(dcfg.modules) == "table" then
-        if type(dcfg.modules.featured_custom) ~= "table" and type(dcfg.modules.featured_reading) == "table" then
-            dcfg.modules.featured_custom = dcfg.modules.featured_reading
-        end
-        if type(dcfg.modules.strip_custom) ~= "table" and type(dcfg.modules.strip_reading) == "table" then
-            dcfg.modules.strip_custom = dcfg.modules.strip_reading
-        end
-        dcfg.modules.featured_reading = nil
-        dcfg.modules.strip_reading = nil
-    end
-end
-
 local function ensure_dashboard_widget_cfg(dcfg)
     local featured_custom = ensure_featured_module_cfg(dcfg, "featured_custom")
     if type(featured_custom.path) ~= "string" then featured_custom.path = nil end
     ensure_featured_module_cfg(dcfg, "featured_tbr")
     ensure_featured_module_cfg(dcfg, "featured_recent")
+    local stats_triplet = ensure_module_cfg(dcfg, "stats_triplet")
+    if stats_triplet.stat_style ~= "outline" and stats_triplet.stat_style ~= "none" then
+        stats_triplet.stat_style = "divider"
+    end
     local strip_custom = ensure_strip_module_cfg(dcfg, "strip_custom")
     if type(strip_custom.paths) ~= "table" then strip_custom.paths = {} end
     ensure_strip_module_cfg(dcfg, "strip_tbr")
@@ -166,7 +138,6 @@ local function ensure_dashboard_cfg(cfg)
     if type(cfg.group_view.dashboard_page) ~= "table" then cfg.group_view.dashboard_page = {} end
     local dcfg = cfg.group_view.dashboard_page
     DashboardPresets.ensurePresetState(dcfg)
-    migrate_custom_widget_ids(dcfg)
 
     if type(dcfg.rows) ~= "table" then dcfg.rows = {} end
     local rows = dcfg.rows
@@ -294,9 +265,62 @@ local function get_daily_quote_index()
     return (get_quote_day_index() % #QUOTES) + 1
 end
 
+local function collect_stats_fields(rows, dcfg)
+    local fields = {}
+    local needs_stats = false
+
+    local function add(name)
+        fields[name] = true
+        needs_stats = true
+    end
+
+    for _i, comp in ipairs(rows or {}) do
+        local id = comp and comp.id
+        if id == "stats_triplet" then
+            local triplet = dcfg.middle_stats_triplet or { "today_pages", "today_duration", "streak" }
+            local added = false
+            for _j, field in ipairs(triplet) do
+                if field == "today_pages" or field == "today_duration"
+                        or field == "week_pages" or field == "week_duration"
+                        or field == "streak" then
+                    add(field)
+                    added = true
+                else
+                    add("today_pages")
+                    added = true
+                end
+            end
+            if not added then add("today_pages") end
+        elseif id == "reading_goals" then
+            local goals = dcfg.goals or {}
+            local metric = goals.metric == "time" and "time" or "pages"
+            local period = goals.period == "weekly" and "weekly" or "daily"
+            if metric == "time" then
+                add(period == "weekly" and "week_duration" or "today_duration")
+            else
+                add(period == "weekly" and "week_pages" or "today_pages")
+            end
+        end
+    end
+
+    if not needs_stats then return nil end
+    return fields
+end
+
+local function stats_fields_key(fields)
+    if type(fields) ~= "table" then return "" end
+    local order = { "today_pages", "today_duration", "week_pages", "week_duration", "streak" }
+    local out = {}
+    for _i, key in ipairs(order) do
+        if fields[key] then out[#out + 1] = key end
+    end
+    return table.concat(out, ",")
+end
+
 local function build_data_provider(cfg, dcfg)
     local provider = {}
     local stats_cached = nil
+    local stats_cached_key = nil
     local history_cached = nil
     local tbr_cached = nil
 
@@ -342,10 +366,12 @@ local function build_data_provider(cfg, dcfg)
         return "featured_recent"
     end
 
-    local function get_stats()
+    local function get_stats(fields)
         if stats_cached then return stats_cached end
         local ok_stats, StatsDB = pcall(require, "common/db_stats")
-        if ok_stats and StatsDB and type(StatsDB.queryStats) == "function" then
+        if ok_stats and StatsDB and type(StatsDB.queryDashboardStats) == "function" then
+            stats_cached = StatsDB.queryDashboardStats(fields) or {}
+        elseif ok_stats and StatsDB and type(StatsDB.queryStats) == "function" then
             stats_cached = StatsDB.queryStats() or {}
         else
             stats_cached = {}
@@ -675,9 +701,35 @@ local function build_data_provider(cfg, dcfg)
 
     provider.stats = {}
 
-    function provider:refreshStats()
+    function provider:prepareStats(rows, force)
+        local fields = collect_stats_fields(rows, dcfg)
+        local key = stats_fields_key(fields)
+        if key == "" then
+            stats_cached = {}
+            stats_cached_key = key
+            self.stats = stats_cached
+            return self.stats
+        end
+        if force or key ~= stats_cached_key then
+            stats_cached = nil
+            stats_cached_key = key
+        end
+        self.stats = get_stats(fields)
+        return self.stats
+    end
+
+    function provider:refreshStats(rows)
+        return self:prepareStats(rows, true)
+    end
+
+    function provider:getStats(rows)
+        return self:prepareStats(rows, false)
+    end
+
+    function provider:clearStats()
         stats_cached = nil
-        self.stats = get_stats()
+        stats_cached_key = nil
+        self.stats = {}
         return self.stats
     end
 
@@ -1015,8 +1067,12 @@ function M.showDashboardView(injectNavbar)
     local data_provider = build_data_provider(cfg, dcfg)
 
     local function rebuild(refresh_stats)
-        if refresh_stats and data_provider and type(data_provider.refreshStats) == "function" then
-            data_provider:refreshStats()
+        if data_provider then
+            if type(data_provider.prepareStats) == "function" then
+                data_provider:prepareStats(rows, refresh_stats == true)
+            elseif refresh_stats and type(data_provider.refreshStats) == "function" then
+                data_provider:refreshStats(rows)
+            end
         end
         local content = build_dashboard_content(menu, cfg, dcfg, rows, data_provider)
         StandalonePage.mount_body(menu, content)

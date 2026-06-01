@@ -8,96 +8,182 @@ local DBConn = require("common/db_connection")
 
 local StatsDB = {}
 
-local function get_db_page_set(conn, id_book, start_time)
-    local out = {}
-    if not conn or not id_book then return out end
-    local sql = string.format(
-        "SELECT DISTINCT page FROM page_stat WHERE id_book = %d AND start_time >= %d;",
-        id_book, start_time
-    )
-    local ok_exec, res = pcall(conn.exec, conn, sql)
-    if not ok_exec or type(res) ~= "table" then return out end
-    local pages = res.page or res[1]
-    if type(pages) ~= "table" then return out end
-    for i = 1, #pages do
-        out[tostring(pages[i])] = true
-    end
-    return out
-end
-
-local function get_live_page_turn_counts(conn, starts)
-    local counts = {
-        today_pages = 0,
-        week_pages = 0,
-        month_pages = 0,
-        year_pages = 0,
-    }
-    if type(starts) ~= "table" then return counts end
-
+local function get_stats_plugin()
     local ok_loader, PluginLoader = pcall(require, "pluginloader")
     if not ok_loader or not PluginLoader or type(PluginLoader.getPluginInstance) ~= "function" then
-        return counts
+        return nil
     end
-
     local stats_plugin = PluginLoader:getPluginInstance("statistics")
-    if type(stats_plugin) ~= "table" then return counts end
-    if type(stats_plugin.isEnabled) == "function" and not stats_plugin:isEnabled() then
-        return counts
+    if type(stats_plugin) ~= "table" then return nil end
+    return stats_plugin
+end
+
+local function flush_pending_stats()
+    local stats_plugin = get_stats_plugin()
+    if not stats_plugin or type(stats_plugin.insertDB) ~= "function" then return end
+    if type(stats_plugin.isEnabled) == "function" and not stats_plugin:isEnabled() then return end
+    pcall(stats_plugin.insertDB, stats_plugin)
+end
+
+local function period_starts()
+    local one_day = 86400
+    local now_t = os.date("*t")
+    local from_begin_day = now_t.hour * 3600 + now_t.min * 60 + now_t.sec
+    local now_ts = os.time()
+    return {
+        one_day = one_day,
+        start_today = now_ts - from_begin_day,
+        period_begin = now_ts - 6 * one_day - from_begin_day,
+        start_month = os.time({
+            year = now_t.year, month = now_t.month, day = 1,
+            hour = 0, min = 0, sec = 0,
+        }),
+        start_year = os.time({
+            year = now_t.year, month = 1, day = 1,
+            hour = 0, min = 0, sec = 0,
+        }),
+    }
+end
+
+local function query_period_stats(conn, start_time, need_pages, need_duration)
+    if need_pages and need_duration then
+        local sql = [[
+            SELECT count(*), sum(sum_duration)
+            FROM (
+                SELECT sum(duration) AS sum_duration
+                FROM page_stat
+                WHERE start_time >= %d
+                GROUP BY id_book, page
+            );
+        ]]
+        local pages, duration = conn:rowexec(string.format(sql, start_time))
+        return tonumber(pages) or 0, tonumber(duration) or 0
     end
+    if need_pages then
+        local sql = [[
+            SELECT count(*)
+            FROM (
+                SELECT 1
+                FROM page_stat
+                WHERE start_time >= %d
+                GROUP BY id_book, page
+            );
+        ]]
+        return tonumber(conn:rowexec(string.format(sql, start_time))) or 0, 0
+    end
+    if need_duration then
+        local sql = [[
+            SELECT sum(sum_duration)
+            FROM (
+                SELECT sum(duration) AS sum_duration
+                FROM page_stat
+                WHERE start_time >= %d
+                GROUP BY id_book, page
+            );
+        ]]
+        return 0, tonumber(conn:rowexec(string.format(sql, start_time))) or 0
+    end
+    return 0, 0
+end
 
-    local id_book = tonumber(stats_plugin.id_curr_book)
-    local page_stat = stats_plugin.page_stat
-    if not id_book or type(page_stat) ~= "table" then return counts end
+local function query_streak(conn, one_day)
+    local sql_streak = [[
+        SELECT DISTINCT strftime('%Y-%m-%d', start_time, 'unixepoch', 'localtime') AS day
+        FROM page_stat
+        WHERE duration > 0
+        ORDER BY day DESC;
+    ]]
+    local ok_streak, streak_result = pcall(conn.exec, conn, sql_streak)
+    if not ok_streak then
+        logger.warn("zen-ui db_stats: streak query error:", streak_result)
+        return 0
+    end
+    if not (streak_result and streak_result.day) then return 0 end
 
-    local existing_today = get_db_page_set(conn, id_book, starts.start_today)
-    local existing_week = get_db_page_set(conn, id_book, starts.period_begin)
-    local existing_month = get_db_page_set(conn, id_book, starts.start_month)
-    local existing_year = get_db_page_set(conn, id_book, starts.start_year)
+    local today_str = os.date("%Y-%m-%d")
+    local yesterday_str = os.date("%Y-%m-%d", os.time() - one_day)
+    local most_recent = streak_result.day[1]
+    if most_recent ~= today_str and most_recent ~= yesterday_str then return 0 end
 
-    local seen_today = {}
-    local seen_week = {}
-    local seen_month = {}
-    local seen_year = {}
+    local streak = 0
+    local expected = most_recent
+    for i = 1, #streak_result.day do
+        if streak_result.day[i] ~= expected then break end
+        streak = streak + 1
+        local y, mo, dd = expected:match("(%d+)-(%d+)-(%d+)")
+        local noon = os.time({
+            year = tonumber(y),
+            month = tonumber(mo),
+            day = tonumber(dd),
+            hour = 12, min = 0, sec = 0,
+        })
+        expected = os.date("%Y-%m-%d", noon - one_day)
+    end
+    return streak
+end
 
-    for page, tuples in pairs(page_stat) do
-        if type(tuples) == "table" then
-            local page_key = tostring(page)
-            local in_today = false
-            local in_week = false
-            local in_month = false
-            local in_year = false
-
-            for i = 1, #tuples do
-                local tuple = tuples[i]
-                local ts = type(tuple) == "table" and tonumber(tuple[1]) or nil
-                if ts then
-                    if ts >= starts.start_year then in_year = true end
-                    if ts >= starts.start_month then in_month = true end
-                    if ts >= starts.period_begin then in_week = true end
-                    if ts >= starts.start_today then in_today = true end
-                end
-            end
-
-            if in_today and not existing_today[page_key] and not seen_today[page_key] then
-                seen_today[page_key] = true
-                counts.today_pages = counts.today_pages + 1
-            end
-            if in_week and not existing_week[page_key] and not seen_week[page_key] then
-                seen_week[page_key] = true
-                counts.week_pages = counts.week_pages + 1
-            end
-            if in_month and not existing_month[page_key] and not seen_month[page_key] then
-                seen_month[page_key] = true
-                counts.month_pages = counts.month_pages + 1
-            end
-            if in_year and not existing_year[page_key] and not seen_year[page_key] then
-                seen_year[page_key] = true
-                counts.year_pages = counts.year_pages + 1
+local function field_set(fields)
+    local set = {}
+    if type(fields) == "table" then
+        for key, value in pairs(fields) do
+            if type(key) == "string" and value == true then
+                set[key] = true
+            elseif type(value) == "string" then
+                set[value] = true
             end
         end
     end
+    if next(set) == nil then
+        set.today_pages = true
+        set.today_duration = true
+        set.week_pages = true
+        set.week_duration = true
+        set.streak = true
+    end
+    return set
+end
 
-    return counts
+function StatsDB.queryDashboardStats(fields)
+    local stats = {
+        today_pages = 0,
+        today_duration = 0,
+        week_pages = 0,
+        week_duration = 0,
+        streak = 0,
+    }
+    local requested = field_set(fields)
+
+    flush_pending_stats()
+
+    local db_path = DBConn.getStatsDbPath()
+    local conn, err = DBConn.open(db_path)
+    if not conn then
+        logger.warn("zen-ui db_stats: cannot open DB:", err)
+        return stats
+    end
+
+    local starts = period_starts()
+    local ok, query_err = pcall(function()
+        if requested.today_pages or requested.today_duration then
+            stats.today_pages, stats.today_duration =
+                query_period_stats(conn, starts.start_today,
+                    requested.today_pages, requested.today_duration)
+        end
+        if requested.week_pages or requested.week_duration then
+            stats.week_pages, stats.week_duration =
+                query_period_stats(conn, starts.period_begin,
+                    requested.week_pages, requested.week_duration)
+        end
+        if requested.streak then
+            stats.streak = query_streak(conn, starts.one_day)
+        end
+    end)
+    if not ok then
+        logger.warn("zen-ui db_stats: dashboard query failed:", query_err)
+    end
+
+    conn:close()
+    return stats
 end
 
 -- Returns a stats table:
@@ -141,6 +227,8 @@ function StatsDB.queryStats()
         books_this_month    = 0,
         books_this_year     = 0,
     }
+
+    flush_pending_stats()
 
     local db_path = DBConn.getStatsDbPath()
     local conn, err = DBConn.open(db_path)
@@ -397,31 +485,7 @@ function StatsDB.queryStats()
             start_year))
         stats.books_this_year = ok_by and (tonumber(by_v) or 0) or 0
 
-        local live_counts = get_live_page_turn_counts(conn, {
-            start_today = start_today,
-            period_begin = period_begin,
-            start_month = start_month,
-            start_year = start_year,
-        })
-        if type(live_counts) == "table" then
-            stats.today_pages = (stats.today_pages or 0) + (tonumber(live_counts.today_pages) or 0)
-            stats.week_pages = (stats.week_pages or 0) + (tonumber(live_counts.week_pages) or 0)
-            stats.month_pages = (stats.month_pages or 0) + (tonumber(live_counts.month_pages) or 0)
-            stats.year_pages = (stats.year_pages or 0) + (tonumber(live_counts.year_pages) or 0)
-            if (live_counts.today_pages or 0) > 0
-                or (live_counts.week_pages or 0) > 0
-                or (live_counts.month_pages or 0) > 0
-                or (live_counts.year_pages or 0) > 0
-            then
-                logger.info("zen-ui db_stats: live page turns supplement:",
-                    "today=", live_counts.today_pages or 0,
-                    "week=", live_counts.week_pages or 0,
-                    "month=", live_counts.month_pages or 0,
-                    "year=", live_counts.year_pages or 0)
-            end
-        end
-
-        logger.info("zen-ui db_stats: adjusted pages totals:",
+        logger.info("zen-ui db_stats: page totals:",
             "today=", stats.today_pages,
             "week=", stats.week_pages)
         logger.info("zen-ui db_stats: month_pages=", stats.month_pages,
