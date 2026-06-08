@@ -20,7 +20,7 @@ local function apply_status_bar()
     local Size = require("ui/size")
     local VerticalGroup = require("ui/widget/verticalgroup")
     local clock_timer = require("common/clock_timer")
-    local library_font = require("common/library_font")
+    local library_font = require("modules/filebrowser/patches/library_font")
     local utils = require("common/utils")
     local paths = require("common/paths")
     local _ = require("gettext")
@@ -404,11 +404,11 @@ local function apply_status_bar()
     -- Converts an ordered list of item keys into a HorizontalGroup widget.
     -- Module-level so it can be used by both createStatusRow and buildStatusRow.
     -- face: optional Font face override; falls back to getBarFont().
-    local function _buildGroup(order, face)
+    local function _buildGroup(order, face, bold_override)
         local group     = HorizontalGroup:new{}
         local sep       = getSeparator()
         local use_color = config.colored
-        local bold      = config.bold_text or false
+        local bold      = bold_override ~= nil and bold_override or config.bold_text or false
         local first     = true
         local function f() return face or getBarFont() end
         for _i, key in ipairs(order) do
@@ -618,6 +618,9 @@ local function apply_status_bar()
     -- opts:  optional table with:
     --   padding   (number)  edge inset in pixels; defaults to h_padding
     --   font_name (string)  Font sizemap key, e.g. "x_smallinfofont"; defaults to "xx_smallinfofont"
+    --   font_size_delta (number) adjusts the resolved font size
+    --   bold_text (boolean) overrides the global status-bar bold setting
+    --   show_bottom_border (boolean) defaults to false for embedded rows
     local function buildStatusRow(width, opts)
         opts = opts or {}
         local edge_pad = opts.padding ~= nil and opts.padding or h_padding
@@ -625,16 +628,19 @@ local function apply_status_bar()
         if opts.font_name then
             local sized = Font.sizemap and Font.sizemap[opts.font_name]
             if sized then
+                if type(opts.font_size_delta) == "number" then
+                    sized = math.max(8, sized + opts.font_size_delta)
+                end
                 face = library_font.getFace(sized)
             end
         end
         if not face then face = getBarFont() end
 
-        local left_content   = _buildGroup(config.left_order   or {}, face)
-        local center_content = _buildGroup(config.center_order or {}, face)
-        local right_content  = _buildGroup(config.right_order  or {}, face)
+        local left_content   = _buildGroup(config.left_order   or {}, face, opts.bold_text)
+        local center_content = _buildGroup(config.center_order or {}, face, opts.bold_text)
+        local right_content  = _buildGroup(config.right_order  or {}, face, opts.bold_text)
 
-        local row_height = Screen:scaleBySize(18)
+        local row_height = Screen:scaleBySize(opts.row_height or 16)
         local function upd(w)
             if w then local s = w:getSize(); if s and s.h > row_height then row_height = s.h end end
         end
@@ -667,7 +673,20 @@ local function apply_status_bar()
                 },
             })
         end
-        return row
+        if opts.show_bottom_border ~= true then
+            return row
+        end
+        local border = LineWidget:new{
+            dimen = Geom:new{ w = math.max(1, width - edge_pad * 2), h = Size.line.medium },
+            background = Blitbuffer.COLOR_LIGHT_GRAY,
+        }
+        local CenterContainer = require("ui/widget/container/centercontainer")
+        local vg = VerticalGroup:new{ align = "center", row }
+        table.insert(vg, CenterContainer:new{
+            dimen = Geom:new{ w = width, h = Size.line.medium },
+            border,
+        })
+        return vg
     end
 
     -- Refresh TouchMenu panels from the shared minute heartbeat.
@@ -935,6 +954,13 @@ local function apply_status_bar()
     -- pausing the shared heartbeat during suspend.
     local _fm_autoRefresh = nil
 
+    local function is_dashboard_without_status_on_top()
+        local stack = UIManager._window_stack
+        local top = stack and stack[#stack]
+        local top_widget = top and top.widget
+        return top_widget and top_widget._zen_dashboard_show_status_bar == false
+    end
+
     local function refreshVisibleStatusBar(fm, clock_tick)
         if FileManager.instance ~= fm then return end
         local stack = UIManager._window_stack
@@ -944,6 +970,7 @@ local function apply_status_bar()
         if top_widget == fm or top_widget == fm.show_parent then
             fm:_updateStatusBar()
         elseif top_widget and top_widget._zen_status_refresh then
+            if top_widget._zen_dashboard_show_status_bar == false then return end
             if clock_tick and top_widget._zen_status_clock_bound then return end
             top_widget._zen_status_refresh(top_widget)
         end
@@ -1125,7 +1152,7 @@ local function apply_status_bar()
             local fm = FileManager.instance
             if fm and is_enabled() then
                 UIManager:nextTick(function()
-                    if FileManager.instance == fm then
+                    if FileManager.instance == fm and not is_dashboard_without_status_on_top() then
                         fm:_updateStatusBar()
                     end
                 end)

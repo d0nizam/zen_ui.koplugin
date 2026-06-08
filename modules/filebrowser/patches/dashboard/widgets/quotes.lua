@@ -44,7 +44,7 @@ end
 return {
     id = "quotes",
     label = "Quotes widget",
-    size = { preferred = 145, min = 90, max = 210 },
+    size = { preferred_pct = 0.18, min_pct = 0.10, max_pct = 0.28, grow_priority = 4 },
     build = function(ctx)
         local width = ctx.width
         local height = ctx.height
@@ -133,6 +133,9 @@ return {
         tap.onTapQuote = function(tap_self, _arg, ges)
             if not tap_self.dimen or not ges or not ges.pos then
                 return false
+            end
+            if ctx.openTopMenu and ctx.openTopMenu(ges) then
+                return true
             end
             if not tap_self.dimen:contains(ges.pos) then
                 return false

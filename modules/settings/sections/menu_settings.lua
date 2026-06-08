@@ -165,7 +165,7 @@ function M.build(ctx)
         return CUSTOM_BUTTON_ICONS
     end
 
-    local _icon_picker = require("common/zen_icon_picker")
+    local _icon_picker = require("common/ui/zen_icon_picker")
     local function showIconPickerDialog(cb, on_select)
         _icon_picker(getCustomButtonIcons(), cb.icon, on_select)
     end

@@ -3,8 +3,6 @@ local Geom = require("ui/geometry")
 local HorizontalGroup = require("ui/widget/horizontalgroup")
 local HorizontalSpan = require("ui/widget/horizontalspan")
 local TextWidget = require("ui/widget/textwidget")
-local LineWidget = require("ui/widget/linewidget")
-local OverlapGroup = require("ui/widget/overlapgroup")
 local FrameContainer = require("ui/widget/container/framecontainer")
 local CenterContainer = require("ui/widget/container/centercontainer")
 local LeftContainer = require("ui/widget/container/leftcontainer")
@@ -12,21 +10,55 @@ local RightContainer = require("ui/widget/container/rightcontainer")
 local Font = require("ui/font")
 local Device = require("device")
 
+local function paint_pill(bb, x, y, w, h, color)
+    if w <= 0 or h <= 0 then return end
+    if h <= 1 then
+        bb:paintRect(x, y, w, h, color)
+        return
+    end
+    local r = math.floor(h / 2)
+    if w <= h then
+        local cx = x + math.floor(w / 2)
+        for row = 0, h - 1 do
+            local dy = row - r + 0.5
+            local half = math.floor(math.sqrt(math.max(0, r * r - dy * dy)) + 0.5)
+            local x0 = math.max(x, cx - half)
+            local rw = math.min(w, half * 2)
+            if rw > 0 then bb:paintRect(x0, y + row, rw, 1, color) end
+        end
+        return
+    end
+    for row = 0, h - 1 do
+        local dy = row - r + 0.5
+        local inset = math.floor(r - math.sqrt(math.max(0, r * r - dy * dy)) + 0.5)
+        local rw = w - inset * 2
+        if rw > 0 then bb:paintRect(x + inset, y + row, rw, 1, color) end
+    end
+end
+
 local function progress_bar(width, current, target, bar_h)
     local pct = 0
     if target > 0 then
         pct = math.min(1, math.max(0, current / target))
     end
     local bar_w = width
-    local fill = math.floor(bar_w * pct)
+    local fill_w = math.floor(bar_w * pct)
 
-    local bar = OverlapGroup:new{
+    local bar = {
         dimen = Geom:new{ w = bar_w, h = bar_h },
-        LineWidget:new{ dimen = Geom:new{ w = bar_w, h = bar_h }, background = Blitbuffer.COLOR_LIGHT_GRAY },
+        getSize = function(self)
+            return self.dimen
+        end,
+        handleEvent = function()
+            return false
+        end,
+        paintTo = function(_self, bb, x, y)
+            paint_pill(bb, x, y, bar_w, bar_h, Blitbuffer.COLOR_LIGHT_GRAY)
+            if fill_w > 0 then
+                paint_pill(bb, x, y, fill_w, bar_h, Blitbuffer.COLOR_DARK_GRAY)
+            end
+        end,
     }
-    if fill > 0 then
-        table.insert(bar, LineWidget:new{ dimen = Geom:new{ w = fill, h = bar_h }, background = Blitbuffer.COLOR_DARK_GRAY })
-    end
 
     return bar, math.floor(pct * 100 + 0.5)
 end
@@ -34,7 +66,7 @@ end
 return {
     id = "reading_goals",
     label = "Reading goals widget",
-    size = { preferred = 90, min = 56, max = 130 },
+    size = { preferred_pct = 0.12, min_pct = 0.08, max_pct = 0.18, grow_priority = 4 },
     build = function(ctx)
         local width = ctx.width
         local height = ctx.height

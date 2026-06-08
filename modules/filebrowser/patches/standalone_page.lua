@@ -24,6 +24,7 @@ end
 
 local function refresh_bound_status_row(target)
     if not target or not target._zen_status_refresh then return end
+    if target._zen_dashboard_show_status_bar == false then return end
     local UIManager = require("ui/uimanager")
     local stack = UIManager._window_stack
     local top = stack and stack[#stack]
@@ -98,6 +99,7 @@ function M.create_menu(opts)
     local ok_menu, menu_or_err = pcall(Menu.new, Menu, {
         name = opts.name,
         title = opts.title or " ",
+        no_title = opts.no_title == true,
         covers_fullscreen = true,
         is_borderless = true,
         is_popout = false,

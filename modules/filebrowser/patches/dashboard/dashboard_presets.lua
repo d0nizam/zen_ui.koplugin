@@ -46,25 +46,50 @@ local DEFAULT_DASHBOARD_PAGE = {
         weekly_target = 210,
         weekly_time_target_min = 210,
     },
+    show_status_bar = true,
     modules = {
         datetime = {
             show_module_title = false,
         },
         featured_custom = {
+            interactive = true,
             order = "default",
             path = nil,
+            progress_meta = {
+                left = "percent",
+                right = "total_pages",
+            },
             show_description = true,
             show_module_title = true,
+            show_status_bar = false,
+            status_bar_bold_text = true,
+            status_bar_show_bottom_border = true,
         },
         featured_recent = {
+            interactive = true,
             order = "default",
+            progress_meta = {
+                left = "percent",
+                right = "total_pages",
+            },
             show_description = true,
             show_module_title = false,
+            show_status_bar = false,
+            status_bar_bold_text = true,
+            status_bar_show_bottom_border = true,
         },
         featured_tbr = {
+            interactive = true,
             order = "default",
+            progress_meta = {
+                left = "percent",
+                right = "total_pages",
+            },
             show_description = true,
             show_module_title = true,
+            show_status_bar = false,
+            status_bar_bold_text = true,
+            status_bar_show_bottom_border = true,
         },
         quotes = {
             show_module_title = false,
@@ -78,6 +103,7 @@ local DEFAULT_DASHBOARD_PAGE = {
         },
         strip_custom = {
             count = 5,
+            interactive = true,
             order = "default",
             paths = {},
             show_module_title = false,
@@ -85,12 +111,14 @@ local DEFAULT_DASHBOARD_PAGE = {
         },
         strip_recent = {
             count = 5,
+            interactive = true,
             order = "default",
             show_module_title = false,
             show_strip_titles = false,
         },
         strip_tbr = {
             count = 5,
+            interactive = true,
             order = "default",
             show_module_title = false,
             show_strip_titles = false,
@@ -108,6 +136,7 @@ local DASHBOARD_KEYS = {
     "rows",
     "middle_stats_triplet",
     "goals",
+    "show_status_bar",
     "modules",
     "quotes",
 }

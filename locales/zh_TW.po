@@ -15,6 +15,9 @@ msgstr "本章剩餘 %1 分鐘"
 msgid "%d%% Read"
 msgstr "已讀 %d%%"
 
+msgid "%s left"
+msgstr "剩餘 %s"
+
 msgid "(auto)"
 msgstr "（自動）"
 
@@ -489,6 +492,9 @@ msgstr "目前主資料夾："
 msgid "Current only"
 msgstr "僅當前"
 
+msgid "Current/total pages"
+msgstr "目前/總頁數"
+
 msgid "Custom"
 msgstr "自訂"
 
@@ -906,6 +912,9 @@ msgstr "已安裝版本高於最新發行版本。"
 msgid "Installing"
 msgstr "正在安裝"
 
+msgid "Interactive"
+msgstr "互動式"
+
 msgid "items per page"
 msgstr "每頁項目數"
 
@@ -944,6 +953,9 @@ msgstr "最新版本"
 
 msgid "Leave empty to use action title"
 msgstr "留空以使用動作標題"
+
+msgid "Left"
+msgstr "左側"
 
 msgid "Left items"
 msgstr "左側項目"
@@ -1230,6 +1242,9 @@ msgstr "局部頁面重新整理"
 msgid "Paste"
 msgstr "貼上"
 
+msgid "Percent"
+msgstr "百分比"
+
 msgid "percent - unopened - finished last"
 msgstr "進度 - 未開啟 - 已完成排最後"
 
@@ -1274,6 +1289,9 @@ msgstr "進度"
 
 msgid "Progress bar"
 msgstr "進度列"
+
+msgid "Progress labels"
+msgstr "進度標籤"
 
 msgid "Project: Title is not compatible with Zen UI."
 msgstr "Project: Title 與 禪 UI 不相容。"
@@ -1421,6 +1439,9 @@ msgstr "反向排序"
 
 msgid "Review"
 msgstr "書評"
+
+msgid "Right"
+msgstr "右側"
 
 msgid "Right items"
 msgstr "右側項目"
@@ -1608,6 +1629,9 @@ msgstr "Show title below cover (mosaic)"
 msgid "Show top border"
 msgstr "顯示頂部邊框"
 
+msgid "Show top status bar"
+msgstr "顯示頂部狀態列"
+
 msgid "Show warmth slider"
 msgstr "顯示色溫滑桿"
 
@@ -1782,6 +1806,9 @@ msgstr "時間"
 msgid "Time Format"
 msgstr "時間格式"
 
+msgid "Time to book end"
+msgstr "到讀完本書的時間"
+
 msgid "Title"
 msgstr "標題"
 
@@ -1808,6 +1835,9 @@ msgstr "頂部狀態列"
 
 msgid "total books"
 msgstr "書籍總數"
+
+msgid "Total pages"
+msgstr "總頁數"
 
 msgid "total pages read"
 msgstr "總閱讀頁數"

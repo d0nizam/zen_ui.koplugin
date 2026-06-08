@@ -2,7 +2,7 @@
 -- Shared cover handling for filebrowser patches
 
 local Blitbuffer = require("ffi/blitbuffer")
-local library_font = require("common/library_font")
+local library_font = require("modules/filebrowser/patches/library_font")
 local TextBoxWidget = require("ui/widget/textboxwidget")
 local BD = require("ui/bidi")
 local _ = require("gettext")

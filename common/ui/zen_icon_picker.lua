@@ -3,7 +3,7 @@
 -- Swipe west/east to change pages; pill bar mirrors zen_scroll_bar style.
 --
 -- Usage:
---   local showIconPickerDialog = require("common/zen_icon_picker")
+--   local showIconPickerDialog = require("common/ui/zen_icon_picker")
 --   showIconPickerDialog(icons_list, current_icon, function(name) ... end)
 --   Each item in icons_list is {name=string, file=string_or_nil}.
 --   file=nil means render via KOReader icon name; otherwise use the absolute path.
@@ -24,7 +24,7 @@ local function showIconPickerDialog(icons_list, current_icon, on_select)
     local VS         = require("ui/widget/verticalspan")
     local IW         = require("ui/widget/iconwidget")
     local TW         = require("ui/widget/textwidget")
-    local pager      = require("common/zen_pager")
+    local pager      = require("common/ui/zen_pager")
 
     local sw, sh   = Screen:getWidth(), Screen:getHeight()
     local icon_sz  = Screen:scaleBySize(48)

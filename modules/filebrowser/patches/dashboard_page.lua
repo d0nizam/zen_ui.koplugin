@@ -2,14 +2,16 @@ local logger = require("logger")
 local ConfigManager = require("config/manager")
 local book_status = require("common/book_status")
 local Blitbuffer = require("ffi/blitbuffer")
-local QUOTES = require("common/dashboard_quotes")
-local DashboardPresets = require("common/dashboard_presets")
+local DashboardQuotes = require("modules/filebrowser/patches/dashboard/dashboard_quotes")
+local DashboardPresets = require("modules/filebrowser/patches/dashboard/dashboard_presets")
+local PresetStore = require("config/preset_store")
 local Registry = require("modules/filebrowser/patches/dashboard/components/registry")
 local StandalonePage = require("modules/filebrowser/patches/standalone_page")
 
 local M = {}
 
 local _dashboard_menu = nil
+local _dashboard_inject_navbar = nil
 local _zen_shared = nil
 local _zen_plugin = nil
 
@@ -31,6 +33,11 @@ local DEFAULT_ROW_ENABLED = {
     featured_recent = true,
     quotes = true,
     strip_recent = true,
+}
+
+local DEFAULT_FEATURED_PROGRESS_META = {
+    left = "percent",
+    right = "total_pages",
 }
 
 local function copy_default_row_order()
@@ -83,12 +90,36 @@ local function ensure_featured_module_cfg(dcfg, module_id)
     local mcfg = ensure_module_cfg(dcfg, module_id)
     mcfg.order = normalize_order(mcfg.order)
     if mcfg.show_description == nil then mcfg.show_description = true end
+    if mcfg.interactive == nil then mcfg.interactive = true end
+    if mcfg.show_status_bar == nil then mcfg.show_status_bar = false end
+    if mcfg.status_bar_show_bottom_border == nil then mcfg.status_bar_show_bottom_border = true end
+    if mcfg.status_bar_bold_text == nil then mcfg.status_bar_bold_text = true end
+    if type(mcfg.progress_meta) ~= "table" then mcfg.progress_meta = {} end
+    if mcfg.progress_meta.left == nil and mcfg.progress_meta.right == nil then
+        for key, side in pairs(mcfg.progress_meta) do
+            if side == "left" and mcfg.progress_meta.left == nil then
+                mcfg.progress_meta.left = key
+            elseif side == "right" and mcfg.progress_meta.right == nil then
+                mcfg.progress_meta.right = key
+            end
+        end
+    end
+    for side, metric in pairs(DEFAULT_FEATURED_PROGRESS_META) do
+        if mcfg.progress_meta[side] ~= "total_pages"
+                and mcfg.progress_meta[side] ~= "current_total"
+                and mcfg.progress_meta[side] ~= "percent"
+                and mcfg.progress_meta[side] ~= "time_left"
+                and mcfg.progress_meta[side] ~= "off" then
+            mcfg.progress_meta[side] = metric
+        end
+    end
     return mcfg
 end
 
 local function ensure_strip_module_cfg(dcfg, module_id)
     local mcfg = ensure_module_cfg(dcfg, module_id)
     mcfg.order = normalize_order(mcfg.order)
+    if mcfg.interactive == nil then mcfg.interactive = true end
     if type(mcfg.count) ~= "number" then mcfg.count = 5 end
     if mcfg.count < 3 then mcfg.count = 3 end
     if mcfg.count > 5 then mcfg.count = 5 end
@@ -121,22 +152,11 @@ local function load_zen_config()
     end
 end
 
-local function save_zen_config(cfg)
-    if type(cfg) ~= "table" then return end
-    if _zen_plugin and _zen_plugin.config == cfg and type(_zen_plugin.saveConfig) == "function" then
-        _zen_plugin:saveConfig()
-        return
+local function ensure_dashboard_cfg()
+    local dcfg = PresetStore.getSettings("dashboard")
+    if type(dcfg) ~= "table" or next(dcfg) == nil then
+        dcfg = DashboardPresets.defaultDashboardPage()
     end
-    pcall(ConfigManager.save, cfg)
-    if _zen_plugin and type(_zen_plugin.config) == "table" then
-        _zen_plugin.config = cfg
-    end
-end
-
-local function ensure_dashboard_cfg(cfg)
-    if type(cfg.group_view) ~= "table" then cfg.group_view = {} end
-    if type(cfg.group_view.dashboard_page) ~= "table" then cfg.group_view.dashboard_page = {} end
-    local dcfg = cfg.group_view.dashboard_page
     DashboardPresets.ensurePresetState(dcfg)
 
     if type(dcfg.rows) ~= "table" then dcfg.rows = {} end
@@ -178,6 +198,8 @@ local function ensure_dashboard_cfg(cfg)
     end
     rows.enabled = normalized_enabled
     rows.max_rows = 5
+
+    if dcfg.show_status_bar == nil then dcfg.show_status_bar = true end
 
     if type(dcfg.middle_stats_triplet) ~= "table" then
         dcfg.middle_stats_triplet = { "today_pages", "today_duration", "streak" }
@@ -261,8 +283,9 @@ local function get_quote_day_index()
 end
 
 local function get_daily_quote_index()
-    if #QUOTES == 0 then return 1 end
-    return (get_quote_day_index() % #QUOTES) + 1
+    local quotes = DashboardQuotes.getQuotes()
+    if #quotes == 0 then return 1 end
+    return (get_quote_day_index() % #quotes) + 1
 end
 
 local function collect_stats_fields(rows, dcfg)
@@ -323,6 +346,7 @@ local function build_data_provider(cfg, dcfg)
     local stats_cached_key = nil
     local history_cached = nil
     local tbr_cached = nil
+    local strip_offsets = {}
 
     local function is_widget_visible(widget_id)
         if type(widget_id) ~= "string" or widget_id == "" then return false end
@@ -427,6 +451,8 @@ local function build_data_provider(cfg, dcfg)
 
         local pct = nil
         local status = nil
+        local current_page = nil
+        local time_left_secs = nil
         local ok_ds, DocSettings = pcall(require, "docsettings")
         if ok_ds and DocSettings and DocSettings:hasSidecarFile(path) then
             local ok_doc, doc = pcall(DocSettings.open, DocSettings, path)
@@ -434,9 +460,25 @@ local function build_data_provider(cfg, dcfg)
                 pct = doc:readSetting("percent_finished")
                 local summary = doc:readSetting("summary")
                 status = summary and summary.status
+                local stats = doc:readSetting("stats")
                 if not pages then
-                    local stats = doc:readSetting("stats")
                     pages = stats and stats.pages
+                end
+                local total_pages = tonumber(pages)
+                if total_pages and pct then
+                    current_page = math.floor(total_pages * pct + 0.5)
+                    if pct > 0 and current_page < 1 then current_page = 1 end
+                    if current_page > total_pages then current_page = total_pages end
+                end
+                local avg_time = stats and tonumber(stats.avg_time)
+                if not avg_time and stats and current_page and current_page > 0 then
+                    local total_read_time = tonumber(stats.total_read_time or stats.total_time)
+                    if total_read_time and total_read_time > 0 then
+                        avg_time = total_read_time / current_page
+                    end
+                end
+                if avg_time and avg_time > 0 and total_pages and current_page and current_page < total_pages then
+                    time_left_secs = math.floor((total_pages - current_page) * avg_time)
                 end
             end
         end
@@ -453,6 +495,8 @@ local function build_data_provider(cfg, dcfg)
             percent = pct or 0,
             status = status,
             pages = pages,
+            current_page = current_page,
+            time_left_secs = time_left_secs,
             description = description,
         }
     end
@@ -625,14 +669,14 @@ local function build_data_provider(cfg, dcfg)
         return get_book(path)
     end
 
-    function provider:getBooksForStrip(source_key, count, order_key)
+    local function get_strip_paths(source_key, count, order_key)
         local n = tonumber(count) or 5
         if n < 1 then n = 1 end
         local source = source_key
         if source ~= "custom_strip" and source ~= "currently_reading" and source ~= "to_be_read" then
             source = "recently_read"
         end
-        local paths = collect_paths_for_source(source, n + 1)
+        local paths = collect_paths_for_source(source, 5000)
 
         if source ~= "custom_strip" and normalize_order(order_key) == "reverse" then
             paths = reverse_copy(paths)
@@ -660,8 +704,25 @@ local function build_data_provider(cfg, dcfg)
             append_unique_paths(paths, get_history(), n)
         end
 
+        return source, paths, n
+    end
+
+    function provider:getBooksForStrip(source_key, count, order_key, component_id)
+        local source, paths, n = get_strip_paths(source_key, count, order_key)
+
+        local offset_key = tostring(component_id or source) .. ":" .. source .. ":" .. normalize_order(order_key)
+        local offset = tonumber(strip_offsets[offset_key]) or 0
+        if #paths > 0 then
+            offset = offset % #paths
+            strip_offsets[offset_key] = offset
+        else
+            offset = 0
+        end
+
         local books = {}
-        for _i, path in ipairs(paths) do
+        for i = 1, math.min(n, #paths) do
+            local idx = ((offset + i - 1) % #paths) + 1
+            local path = paths[idx]
             local book = get_book(path)
             if book then
                 table.insert(books, book)
@@ -671,7 +732,23 @@ local function build_data_provider(cfg, dcfg)
         return books
     end
 
+    function provider:shiftStrip(source_key, count, order_key, direction, component_id)
+        local source, paths, n = get_strip_paths(source_key, count, order_key)
+        if #paths <= n then return false end
+        local offset_key = tostring(component_id or source) .. ":" .. source .. ":" .. normalize_order(order_key)
+        local cur = tonumber(strip_offsets[offset_key]) or 0
+        local step = direction == "previous" and -n or n
+        strip_offsets[offset_key] = (cur + step) % #paths
+        if _dashboard_menu and _dashboard_menu._dashboard_rebuild then
+            _dashboard_menu:_dashboard_rebuild()
+        end
+        return true
+    end
+
     function provider:getCurrentQuote()
+        local quotes = DashboardQuotes.getQuotes()
+        local quote_count = #quotes
+        if quote_count == 0 then return nil end
         local idx
         local quote_cfg = dcfg.quotes or {}
         if quote_cfg.day_seed == get_quote_day_index() and type(quote_cfg.manual_index) == "number" then
@@ -680,20 +757,23 @@ local function build_data_provider(cfg, dcfg)
             idx = get_daily_quote_index()
         end
         if idx < 1 then idx = 1 end
-        if idx > #QUOTES then idx = ((idx - 1) % #QUOTES) + 1 end
-        return QUOTES[idx]
+        if idx > quote_count then idx = ((idx - 1) % quote_count) + 1 end
+        return quotes[idx]
     end
 
     function provider:nextQuote()
+        local quotes = DashboardQuotes.getQuotes()
+        local quote_count = #quotes
+        if quote_count == 0 then return end
         local quote_cfg = dcfg.quotes or {}
         if type(quote_cfg.manual_index) ~= "number" then
             quote_cfg.manual_index = get_daily_quote_index()
         end
         quote_cfg.manual_index = quote_cfg.manual_index + 1
-        if quote_cfg.manual_index > #QUOTES then quote_cfg.manual_index = 1 end
+        if quote_cfg.manual_index > quote_count then quote_cfg.manual_index = 1 end
         quote_cfg.day_seed = get_quote_day_index()
         dcfg.quotes = quote_cfg
-        save_zen_config(cfg)
+        PresetStore.saveSettings("dashboard", dcfg)
         if _dashboard_menu and _dashboard_menu._dashboard_rebuild then
             _dashboard_menu:_dashboard_rebuild()
         end
@@ -736,15 +816,26 @@ local function build_data_provider(cfg, dcfg)
     return provider
 end
 
+local function size_to_px(size, key, pct_key, body_h, fallback)
+    local pct = tonumber(size[pct_key])
+    if pct then
+        return math.max(1, math.floor(body_h * pct + 0.5))
+    end
+    return tonumber(size[key]) or fallback
+end
+
 local function compute_row_heights(rows, body_h)
     local specs = {}
     local total_min = 0
 
     for _i, comp in ipairs(rows) do
         local size = comp.size or {}
-        local pref = tonumber(size.preferred) or 120
-        local min_h = tonumber(size.min) or math.max(60, math.floor(pref * 0.7))
-        local max_h = tonumber(size.max) or math.max(pref, min_h)
+        local pref = size_to_px(size, "preferred", "preferred_pct", body_h, math.floor(body_h * 0.20))
+        local min_h = size_to_px(size, "min", "min_pct", body_h, math.max(1, math.floor(pref * 0.55)))
+        local max_h = size_to_px(size, "max", "max_pct", body_h, math.max(pref, min_h))
+        if max_h < min_h then max_h = min_h end
+        if pref < min_h then pref = min_h end
+        if pref > max_h then pref = max_h end
         local id = comp.id or ""
         table.insert(specs, {
             id = id,
@@ -754,6 +845,7 @@ local function compute_row_heights(rows, body_h)
             pref = pref,
             min = min_h,
             max = max_h,
+            grow_priority = tonumber(size.grow_priority) or 10,
             h = pref,
         })
         total_min = total_min + min_h
@@ -814,47 +906,75 @@ local function compute_row_heights(rows, body_h)
         total = total - 1
     end
 
-    while total < body_h do
-        local grew = false
-        for _i, sp in ipairs(specs) do
-            if total >= body_h then break end
-            if sp.h < sp.max then
-                sp.h = sp.h + 1
-                total = total + 1
-                grew = true
-            end
+    local grow_priorities = {}
+    local seen_priority = {}
+    for _i, sp in ipairs(specs) do
+        local pri = tonumber(sp.grow_priority) or 10
+        if not seen_priority[pri] then
+            seen_priority[pri] = true
+            grow_priorities[#grow_priorities + 1] = pri
         end
-        if not grew then break end
+    end
+    table.sort(grow_priorities)
+    for _i, pri in ipairs(grow_priorities) do
+        if total >= body_h then break end
+        while total < body_h do
+            local grew = false
+            for _j, sp in ipairs(specs) do
+                if total >= body_h then break end
+                if (tonumber(sp.grow_priority) or 10) == pri and sp.h < sp.max then
+                    sp.h = sp.h + 1
+                    total = total + 1
+                    grew = true
+                end
+            end
+            if not grew then break end
+        end
     end
 
     return specs
 end
 
-local function grow_row_heights_evenly(row_heights, extra_px)
+local function grow_row_heights_by_priority(row_heights, extra_px)
     local remaining = tonumber(extra_px) or 0
     local grown = 0
     if remaining <= 0 then
         return grown
     end
-    while remaining > 0 do
-        local grew = false
-        for _i, row in ipairs(row_heights) do
-            if remaining <= 0 then break end
-            local max_h = tonumber(row.max) or tonumber(row.h) or 0
-            local cur_h = tonumber(row.h) or 0
-            if cur_h < max_h then
-                row.h = cur_h + 1
-                remaining = remaining - 1
-                grown = grown + 1
-                grew = true
-            end
+    local priorities = {}
+    local seen = {}
+    for _i, row in ipairs(row_heights) do
+        local pri = tonumber(row.grow_priority) or 10
+        if not seen[pri] then
+            seen[pri] = true
+            priorities[#priorities + 1] = pri
         end
-        if not grew then break end
+    end
+    table.sort(priorities)
+    for _i, pri in ipairs(priorities) do
+        if remaining <= 0 then break end
+        while remaining > 0 do
+            local grew = false
+            for _j, row in ipairs(row_heights) do
+                if remaining <= 0 then break end
+                if (tonumber(row.grow_priority) or 10) == pri then
+                    local max_h = tonumber(row.max) or tonumber(row.h) or 0
+                    local cur_h = tonumber(row.h) or 0
+                    if cur_h < max_h then
+                        row.h = cur_h + 1
+                        remaining = remaining - 1
+                        grown = grown + 1
+                        grew = true
+                    end
+                end
+            end
+            if not grew then break end
+        end
     end
     return grown
 end
 
-local function build_dashboard_content(menu, cfg, dcfg, rows, data_provider)
+local function build_dashboard_content(menu, dcfg, rows, data_provider)
     local Device = require("device")
     local Screen = Device.screen
     local Geom = require("ui/geometry")
@@ -867,8 +987,9 @@ local function build_dashboard_content(menu, cfg, dcfg, rows, data_provider)
     local FrameContainer = require("ui/widget/container/framecontainer")
     local Font = require("ui/font")
 
+    local show_status_bar = dcfg.show_status_bar ~= false
     local tb = menu.title_bar
-    local tb_h = tb and tb:getSize().h or 0
+    local tb_h = show_status_bar and tb and tb:getSize().h or 0
     local menu_h = menu.height or (menu.inner_dimen and menu.inner_dimen.h or menu.dimen.h)
     local body_h = menu_h - tb_h
     local navbar_h = tonumber(rawget(_G, "__ZEN_UI_NAVBAR_HEIGHT")) or 0
@@ -877,22 +998,16 @@ local function build_dashboard_content(menu, cfg, dcfg, rows, data_provider)
     if body_h < 1 then body_h = hard_body_h end
     if body_h > hard_body_h then body_h = hard_body_h end
     local body_w = menu.inner_dimen and menu.inner_dimen.w or Screen:getWidth()
-    local side_pad = Screen:scaleBySize(10) -- keep dashboard body gutters aligned with status bar edge padding
+    local side_pad = math.max(2, math.min(Screen:scaleBySize(8), math.floor(body_w * 0.025)))
     if side_pad * 2 >= body_w then
-        side_pad = math.max(0, math.floor(body_w * 0.08))
+        side_pad = math.max(0, math.floor(body_w * 0.04))
     end
     local content_w = math.max(1, body_w - side_pad * 2)
     local right_pad = math.max(0, body_w - content_w - side_pad)
-    local page_pad = math.max(2, Screen:scaleBySize(4))
-    if page_pad * 2 >= body_h then
-        page_pad = math.max(0, math.floor((body_h - 1) / 2))
-    end
+    local page_pad = 0
     local layout_h = math.max(1, body_h - page_pad * 2)
     local row_gap = 0
-    if #rows > 1 then
-        row_gap = math.max(1, math.floor(Screen:scaleBySize(3)))
-    end
-    local max_row_gap = #rows > 1 and math.max(row_gap, math.floor(Screen:scaleBySize(6))) or 0
+    local max_row_gap = 0
     local gaps_h = row_gap * math.max(0, #rows - 1)
     local rows_h_budget = layout_h - gaps_h
     if rows_h_budget < #rows then rows_h_budget = math.max(1, layout_h) end
@@ -904,7 +1019,7 @@ local function build_dashboard_content(menu, cfg, dcfg, rows, data_provider)
     end
     local extra_spacing_h = rows_h_budget - rows_h_used
     if extra_spacing_h > 0 then
-        local grown = grow_row_heights_evenly(row_heights, extra_spacing_h)
+        local grown = grow_row_heights_by_priority(row_heights, extra_spacing_h)
         extra_spacing_h = extra_spacing_h - grown
     end
     if extra_spacing_h > 0 and #rows > 1 and row_gap < max_row_gap then
@@ -917,9 +1032,7 @@ local function build_dashboard_content(menu, cfg, dcfg, rows, data_provider)
         end
     end
     local extra_top_pad = 0
-    if extra_spacing_h > 0 then
-        extra_top_pad = math.floor(extra_spacing_h / 2)
-    end
+    if extra_spacing_h > 0 then extra_top_pad = 0 end
 
     local face_title = Font:getFace("smallinfofont", Screen:scaleBySize(24))
     local face_value = Font:getFace("smallinfofont", Screen:scaleBySize(20))
@@ -938,6 +1051,37 @@ local function build_dashboard_content(menu, cfg, dcfg, rows, data_provider)
         elseif fm and type(fm.openFile) == "function" then
             fm:openFile(path)
         end
+    end
+
+    local function show_book_context_menu(path)
+        if type(path) ~= "string" or path == "" then return false end
+        local fm = FileManager.instance
+        local fc = fm and fm.file_chooser
+        if not (fc and type(fc.showFileDialog) == "function") then return false end
+        fc:showFileDialog({
+            path = path,
+            is_file = true,
+            _zen_dashboard_context = true,
+            _zen_disable_select = true,
+        })
+        return true
+    end
+
+    local function shift_strip(source_key, count, order_key, direction, component_id)
+        if not (data_provider and type(data_provider.shiftStrip) == "function") then return false end
+        return data_provider:shiftStrip(source_key, count, order_key, direction, component_id)
+    end
+
+    local top_tap_zone_h = math.max(1, math.floor(Screen:getHeight() * 0.05))
+    local function open_top_menu(ges)
+        if not (ges and ges.pos and ges.pos.y < top_tap_zone_h) then return false end
+        local fm = FileManager.instance
+        local fm_menu = fm and fm.menu
+        if fm_menu and fm_menu.activation_menu ~= "swipe" then
+            fm_menu:onShowMenu(fm_menu:_getTabIndexFromLocation(ges))
+            return true
+        end
+        return false
     end
 
     local children = { align = "left" }
@@ -984,6 +1128,10 @@ local function build_dashboard_content(menu, cfg, dcfg, rows, data_provider)
             config = dcfg,
             data = data_provider,
             openBook = open_book,
+            showBookMenu = show_book_context_menu,
+            shiftStrip = shift_strip,
+            openTopMenu = open_top_menu,
+            buildStatusRow = _zen_shared and _zen_shared.buildStatusRow,
             face_title = face_title,
             face_value = face_value,
             face_label = face_label,
@@ -1041,30 +1189,53 @@ local function build_dashboard_content(menu, cfg, dcfg, rows, data_provider)
     }
 end
 
+local function rows_need_clock_rebuild(rows, dcfg)
+    for _i, comp in ipairs(rows or {}) do
+        if comp.id == "datetime" then
+            return true
+        end
+        if comp.id == "featured_recent" or comp.id == "featured_custom" or comp.id == "featured_tbr" then
+            local mcfg = type(dcfg.modules) == "table" and dcfg.modules[comp.id] or nil
+            if mcfg and mcfg.show_status_bar == true then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 function M.showDashboardView(injectNavbar)
     local UIManager = require("ui/uimanager")
 
+    _dashboard_inject_navbar = injectNavbar
     local cfg = load_zen_config()
     if type(cfg) ~= "table" then return end
-    local dcfg = ensure_dashboard_cfg(cfg)
+    local dcfg = ensure_dashboard_cfg()
+    local show_status_bar = dcfg.show_status_bar ~= false
 
     local menu = StandalonePage.create_menu{
         name = "dashboard",
         title = " ",
+        no_title = not show_status_bar,
     }
     StandalonePage.prepare_shell(menu)
 
     local createStatusRow = _zen_shared and _zen_shared.createStatusRow
     local createStatusRowCustomBack = _zen_shared and _zen_shared.createStatusRowCustomBack
     local repaintTitleBar = _zen_shared and _zen_shared.repaintTitleBar
-    StandalonePage.apply_status_row(menu, {
-        createStatusRow = createStatusRow,
-        createStatusRowCustomBack = createStatusRowCustomBack,
-        repaintTitleBar = repaintTitleBar,
-    })
+    if show_status_bar then
+        StandalonePage.apply_status_row(menu, {
+            createStatusRow = createStatusRow,
+            createStatusRowCustomBack = createStatusRowCustomBack,
+            repaintTitleBar = repaintTitleBar,
+        })
+    end
+    menu._zen_dashboard_show_status_bar = show_status_bar
 
     local rows = resolve_rows(dcfg)
     local data_provider = build_data_provider(cfg, dcfg)
+    local needs_clock_rebuild = rows_need_clock_rebuild(rows, dcfg)
+    menu._zen_dashboard_needs_clock_rebuild = needs_clock_rebuild
 
     local function rebuild(refresh_stats)
         if data_provider then
@@ -1074,29 +1245,47 @@ function M.showDashboardView(injectNavbar)
                 data_provider:refreshStats(rows)
             end
         end
-        local content = build_dashboard_content(menu, cfg, dcfg, rows, data_provider)
+        local content = build_dashboard_content(menu, dcfg, rows, data_provider)
         StandalonePage.mount_body(menu, content)
         UIManager:setDirty(menu, "ui")
     end
 
-    local status_refresh = menu._zen_status_refresh
-    menu._zen_status_refresh = function(self, ...)
-        local target = type(self) == "table" and self or menu
-        if status_refresh then
-            status_refresh(target, ...)
+    if show_status_bar then
+        local status_refresh = menu._zen_status_refresh
+        menu._zen_status_refresh = function(self, ...)
+            local target = type(self) == "table" and self or menu
+            if status_refresh then
+                status_refresh(target, ...)
+            end
+            if needs_clock_rebuild and target and target._dashboard_rebuild then
+                target:_dashboard_rebuild()
+            end
         end
-        for _i, comp in ipairs(rows) do
-            if comp.id == "datetime" then
+    else
+        menu._zen_status_refresh = nil
+    end
+    if not show_status_bar and needs_clock_rebuild then
+        pcall(function()
+            require("common/clock_timer").bind(menu, function(target)
                 if target and target._dashboard_rebuild then
                     target:_dashboard_rebuild()
                 end
-                break
-            end
-        end
+            end)
+        end)
     end
 
-    function menu:_dashboard_rebuild(refresh_stats)
+    function menu:_dashboard_rebuild(refresh_stats, reload_config)
+        if reload_config == true then
+            local next_cfg = load_zen_config()
+            if type(next_cfg) == "table" then
+                cfg = next_cfg
+                dcfg = ensure_dashboard_cfg()
+                data_provider = build_data_provider(cfg, dcfg)
+            end
+        end
         rows = resolve_rows(dcfg)
+        needs_clock_rebuild = rows_need_clock_rebuild(rows, dcfg)
+        self._zen_dashboard_needs_clock_rebuild = needs_clock_rebuild
         rebuild(refresh_stats == true)
     end
 
@@ -1139,10 +1328,38 @@ end
 
 function M.rebuildActive()
     if _dashboard_menu and _dashboard_menu._dashboard_rebuild then
-        _dashboard_menu:_dashboard_rebuild()
+        local cfg = load_zen_config()
+        local dcfg = type(cfg) == "table" and ensure_dashboard_cfg() or nil
+        local show_status_bar = not dcfg or dcfg.show_status_bar ~= false
+        local needs_clock_rebuild = false
+        if dcfg then
+            needs_clock_rebuild = rows_need_clock_rebuild(resolve_rows(dcfg), dcfg)
+        end
+        if _dashboard_menu._zen_dashboard_show_status_bar ~= show_status_bar
+                or (not show_status_bar
+                    and _dashboard_menu._zen_dashboard_needs_clock_rebuild ~= needs_clock_rebuild) then
+            local UIManager = require("ui/uimanager")
+            UIManager:close(_dashboard_menu)
+            _dashboard_menu = nil
+            M.showDashboardView(_dashboard_inject_navbar)
+            return true
+        end
+        _dashboard_menu:_dashboard_rebuild(true, true)
         return true
     end
     return false
+end
+
+function M.hasActive()
+    return _dashboard_menu ~= nil
+end
+
+function M.isActiveOnTop()
+    if not _dashboard_menu then return false end
+    local UIManager = require("ui/uimanager")
+    local stack = UIManager._window_stack
+    local top = stack and stack[#stack]
+    return top and top.widget == _dashboard_menu
 end
 
 function M.closeAll()

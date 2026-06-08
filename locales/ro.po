@@ -15,6 +15,9 @@ msgstr "%1 min rămase în capitol"
 msgid "%d%% Read"
 msgstr "%d%% citit"
 
+msgid "%s left"
+msgstr "%s rămase"
+
 msgid "(auto)"
 msgstr "(auto)"
 
@@ -489,6 +492,9 @@ msgstr "Dosarul principal curent:"
 msgid "Current only"
 msgstr "Doar curent"
 
+msgid "Current/total pages"
+msgstr "Pagini curente/totale"
+
 msgid "Custom"
 msgstr "Personalizat"
 
@@ -906,6 +912,9 @@ msgstr "Versiunea instalată este mai nouă decât cea mai recentă versiune."
 msgid "Installing"
 msgstr "Se instalează"
 
+msgid "Interactive"
+msgstr "Interactiv"
+
 msgid "items per page"
 msgstr "elemente pe pagină"
 
@@ -944,6 +953,9 @@ msgstr "cea mai recentă"
 
 msgid "Leave empty to use action title"
 msgstr "Lasă gol pentru a folosi titlul acțiunii"
+
+msgid "Left"
+msgstr "Stânga"
 
 msgid "Left items"
 msgstr "Elemente stânga"
@@ -1230,6 +1242,9 @@ msgstr "Reîmprospătare pagini parțiale"
 msgid "Paste"
 msgstr "Lipește"
 
+msgid "Percent"
+msgstr "Procent"
+
 msgid "percent - unopened - finished last"
 msgstr "procent - nedeschis - terminat ultimul"
 
@@ -1274,6 +1289,9 @@ msgstr "Progres"
 
 msgid "Progress bar"
 msgstr "Bară de progres"
+
+msgid "Progress labels"
+msgstr "Etichete progres"
 
 msgid "Project: Title is not compatible with Zen UI."
 msgstr "Project: Title nu este compatibil cu Zen UI."
@@ -1421,6 +1439,9 @@ msgstr "Sortare inversă"
 
 msgid "Review"
 msgstr "Recenzie"
+
+msgid "Right"
+msgstr "Dreapta"
 
 msgid "Right items"
 msgstr "Elemente dreapta"
@@ -1608,6 +1629,9 @@ msgstr "Show title below cover (mosaic)"
 msgid "Show top border"
 msgstr "Afișează chenarul superior"
 
+msgid "Show top status bar"
+msgstr "Afișează bara de stare de sus"
+
 msgid "Show warmth slider"
 msgstr "Afișează cursorul de căldură"
 
@@ -1782,6 +1806,9 @@ msgstr "Timp"
 msgid "Time Format"
 msgstr "Format oră"
 
+msgid "Time to book end"
+msgstr "Timp până la finalul cărții"
+
 msgid "Title"
 msgstr "Titlu"
 
@@ -1808,6 +1835,9 @@ msgstr "Bară de stare de sus"
 
 msgid "total books"
 msgstr "total cărți"
+
+msgid "Total pages"
+msgstr "Pagini totale"
 
 msgid "total pages read"
 msgstr "pagini totale citite"

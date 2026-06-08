@@ -28,6 +28,42 @@ function M.build(ctx)
         end
     end
 
+    local pending_navbar_refresh = false
+    local pending_navbar_poll_active = false
+
+    local function is_filemanager_menu_open()
+        local ok_fm, FileManager = pcall(require, "apps/filemanager/filemanager")
+        if not ok_fm or not FileManager or not FileManager.instance then return false end
+        local fm = FileManager.instance
+        return fm.menu ~= nil and fm.menu.menu_container ~= nil
+    end
+
+    local function refresh_navbar_after_menu_close()
+        if is_filemanager_menu_open() then
+            UIManager:scheduleIn(0.25, refresh_navbar_after_menu_close)
+            return
+        end
+        pending_navbar_poll_active = false
+        if not pending_navbar_refresh then return end
+        pending_navbar_refresh = false
+        local reinject = rawget(_G, "__ZEN_UI_REINJECT_NAVBARS")
+            or rawget(_G, "__ZEN_UI_REINJECT_FM_NAVBAR")
+        if reinject then
+            reinject()
+        else
+            save_and_apply("navbar")
+        end
+    end
+
+    local function save_and_defer_navbar_refresh()
+        ctx.plugin:saveConfig()
+        pending_navbar_refresh = true
+        if not pending_navbar_poll_active then
+            pending_navbar_poll_active = true
+            UIManager:scheduleIn(0.25, refresh_navbar_after_menu_close)
+        end
+    end
+
     if type(config.navbar.default_tab) ~= "string" or config.navbar.default_tab == "" then
         config.navbar.default_tab = "books"
     end
@@ -137,7 +173,7 @@ function M.build(ctx)
                 end,
                 callback = function()
                     config.navbar.show_tabs[tab_id] = config.navbar.show_tabs[tab_id] ~= true
-                    save_and_apply_navbar()
+                    save_and_defer_navbar_refresh()
                 end,
             })
         end
@@ -168,7 +204,7 @@ function M.build(ctx)
         return CUSTOM_TAB_ICONS
     end
 
-    local _icon_picker = require("common/zen_icon_picker")
+    local _icon_picker = require("common/ui/zen_icon_picker")
     local function showTabIconPicker(ct, on_select)
         _icon_picker(getCustomTabIcons(), ct.icon, on_select)
     end
@@ -188,7 +224,7 @@ function M.build(ctx)
             callback = function()
                 local cur = config.navbar.show_tabs[ct.id]
                 config.navbar.show_tabs[ct.id] = (cur == false)
-                save_and_apply_navbar()
+                save_and_defer_navbar_refresh()
             end,
         })
 
@@ -273,7 +309,7 @@ function M.build(ctx)
                 end
                 config.navbar.show_tabs[ct.id] = nil
                 local new_order = {}
-                for _, id in ipairs(config.navbar.tab_order) do
+                for _i, id in ipairs(config.navbar.tab_order) do
                     if id ~= ct.id then new_order[#new_order + 1] = id end
                 end
                 config.navbar.tab_order = new_order
@@ -371,7 +407,7 @@ function M.build(ctx)
                         callback = function()
                             local SortWidget = require("ui/widget/sortwidget")
                             local sort_items = {}
-                            for _, tab in ipairs(navbar_tab_items) do
+                            for _i, tab in ipairs(navbar_tab_items) do
                                 local is_visible = tab.id == "books" or config.navbar.show_tabs[tab.id] == true
                                 table.insert(sort_items, {
                                     text = tab.text,
@@ -394,12 +430,12 @@ function M.build(ctx)
                                 callback = function()
                                     local new_order = {}
                                     local in_sort = {}
-                                    for _, item in ipairs(sort_items) do
+                                    for _i, item in ipairs(sort_items) do
                                         new_order[#new_order + 1] = item.orig_item
                                         in_sort[item.orig_item] = true
                                     end
                                     -- Preserve any IDs not in the sort widget
-                                    for _, id in ipairs(config.navbar.tab_order) do
+                                    for _i, id in ipairs(config.navbar.tab_order) do
                                         if not in_sort[id] then new_order[#new_order + 1] = id end
                                     end
                                     config.navbar.tab_order = new_order
@@ -828,9 +864,33 @@ function M.build(ctx)
             {
                 text = _("Show labels"),
                 checked_func = function() return config.navbar.show_labels == true end,
+                enabled_func = function()
+                    return config.navbar.show_labels ~= true
+                        or config.navbar.show_icons ~= false
+                end,
                 callback = function()
+                    if config.navbar.show_labels == true
+                            and config.navbar.show_icons == false then
+                        return
+                    end
                     config.navbar.show_labels = config.navbar.show_labels ~= true
-                    save_and_apply("navbar")
+                    save_and_defer_navbar_refresh()
+                end,
+            },
+            {
+                text = _("Show icons"),
+                checked_func = function() return config.navbar.show_icons ~= false end,
+                enabled_func = function()
+                    return config.navbar.show_icons == false
+                        or config.navbar.show_labels == true
+                end,
+                callback = function()
+                    if config.navbar.show_icons ~= false
+                            and config.navbar.show_labels ~= true then
+                        return
+                    end
+                    config.navbar.show_icons = config.navbar.show_icons == false
+                    save_and_defer_navbar_refresh()
                 end,
             },
         },

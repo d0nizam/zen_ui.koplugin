@@ -16,7 +16,7 @@ local function apply_navbar()
     local UIManager = require("ui/uimanager")
     local VerticalGroup = require("ui/widget/verticalgroup")
     local VerticalSpan = require("ui/widget/verticalspan")
-    local library_font = require("common/library_font")
+    local library_font = require("modules/filebrowser/patches/library_font")
     local utils = require("common/utils")
     local paths = require("common/paths")
     local Screen = Device.screen
@@ -72,6 +72,7 @@ local function apply_navbar()
             menu = false,
         },
         tab_order = { "page_left", "books", "manga", "news", "continue", "authors", "series", "tags", "to_be_read", "dashboard", "history", "favorites", "collections", "stats", "search", "calibre_search", "exit", "page_right", "menu" },
+        show_icons = true,
         show_labels = true,
         books_label = "",  -- empty = auto-translated "Library"
         dashboard_label = "Home",
@@ -673,23 +674,28 @@ local function apply_navbar()
 
         local use_bold = styled and config.active_tab_bold
 
+        local show_icon = config.show_icons ~= false
+        local show_label = config.show_labels == true or not show_icon
+
         local icon
-        local icon_path = utils.resolveIcon(_icons_dir, tab.icon)
-        if active_color then
-            icon = ColorIconWidget:new{
-                icon   = icon_path and nil or tab.icon,
-                file   = icon_path or nil,
-                width  = navbar_icon_size,
-                height = navbar_icon_size,
-                _tint_color = active_color,
-            }
-        else
-            icon = IconWidget:new{
-                icon   = icon_path and nil or tab.icon,
-                file   = icon_path or nil,
-                width  = navbar_icon_size,
-                height = navbar_icon_size,
-            }
+        if show_icon then
+            local icon_path = utils.resolveIcon(_icons_dir, tab.icon)
+            if active_color then
+                icon = ColorIconWidget:new{
+                    icon   = icon_path and nil or tab.icon,
+                    file   = icon_path or nil,
+                    width  = navbar_icon_size,
+                    height = navbar_icon_size,
+                    _tint_color = active_color,
+                }
+            else
+                icon = IconWidget:new{
+                    icon   = icon_path and nil or tab.icon,
+                    file   = icon_path or nil,
+                    width  = navbar_icon_size,
+                    height = navbar_icon_size,
+                }
+            end
         end
 
         local size = font_size or navbar_font_size_steps[1]
@@ -715,7 +721,7 @@ local function apply_navbar()
         local show_underline = styled and config.active_tab_underline
         local underline
         if show_underline then
-            local underline_w = config.show_labels and label:getSize().w or icon:getSize().w
+            local underline_w = show_label and label:getSize().w or icon:getSize().w
             local underline_color = Blitbuffer.COLOR_BLACK
             if config.colored then
                 local c = config.active_tab_color
@@ -742,40 +748,23 @@ local function apply_navbar()
             underline = VerticalSpan:new{ width = underline_thickness }
         end
 
-        local icon_label_group
-        if config.show_labels then
-            if config.underline_above then
-                icon_label_group = VerticalGroup:new{
-                    align = "center",
-                    underline,
-                    icon,
-                    label,
-                }
-            else
-                icon_label_group = VerticalGroup:new{
-                    align = "center",
-                    icon,
-                    label,
-                    underline,
-                }
-            end
-        else
-            if config.underline_above then
-                icon_label_group = VerticalGroup:new{
-                    align = "center",
-                    underline,
-                    icon,
-                }
-            else
-                icon_label_group = VerticalGroup:new{
-                    align = "center",
-                    icon,
-                    underline,
-                }
-            end
+        local icon_label_children = { align = "center" }
+        if config.underline_above then
+            table.insert(icon_label_children, underline)
+        end
+        if show_icon and icon then
+            table.insert(icon_label_children, icon)
+        end
+        if show_label then
+            table.insert(icon_label_children, label)
+        end
+        if not config.underline_above then
+            table.insert(icon_label_children, underline)
         end
 
-        local v_pad = config.show_labels and navbar_v_padding or navbar_v_padding * 2
+        local icon_label_group = VerticalGroup:new(icon_label_children)
+
+        local v_pad = show_label and navbar_v_padding or navbar_v_padding * 2
 
         local children = {
             align = "center",
@@ -1008,6 +997,7 @@ local function apply_navbar()
         end
 
         navbar[1] = visual
+        _G.__ZEN_UI_NAVBAR_HEIGHT = navbar:getSize().h
         return navbar
     end
 
@@ -1480,6 +1470,7 @@ local function apply_navbar()
             file_chooser,
             navbar,
         }
+        if fm_ui.resetLayout then fm_ui:resetLayout() end
     end
 
     -- === Inject navbar into standalone views (History, Favorites, Collections) ===
@@ -1579,11 +1570,47 @@ local function apply_navbar()
         -- Wrap with navbar below,
         -- opaque background to prevent FM navbar bleed-through
         local FrameContainer = require("ui/widget/container/framecontainer")
+        local body_widget = menu[1]
         local vg_children = { align = "left" }
-        table.insert(vg_children, menu[1])
+        table.insert(vg_children, body_widget)
         table.insert(vg_children, navbar)
 
         local vg = VerticalGroup:new(vg_children)
+        menu._zen_navbar_height = navbar:getSize().h
+        local function resizeStandaloneBody(navbar_h)
+            local body_h = Screen:getHeight() - navbar_h
+            if body_h < 1 then body_h = Screen:getHeight() end
+            menu.height = body_h
+            if type(body_widget) == "table" then
+                body_widget.height = body_h
+                if body_widget.dimen then body_widget.dimen.h = body_h end
+                if body_widget.inner_dimen then body_widget.inner_dimen.h = body_h end
+                if body_widget.resetLayout then body_widget:resetLayout() end
+            end
+            if vg.resetLayout then vg:resetLayout() end
+            if menu[1] and menu[1].resetLayout then menu[1]:resetLayout() end
+        end
+        menu._zen_reinject_navbar = function()
+            local saved_active_local = active_tab
+            active_tab = view_tab_id
+            local new_nb = createNavBar()
+            active_tab = saved_active_local
+            if not new_nb then return end
+            local new_h = new_nb:getSize().h
+            local old_h = menu._zen_navbar_height or new_h
+            if new_h ~= old_h and menu.name == "dashboard" then
+                local Dashboard = zen_plugin._zen_shared and zen_plugin._zen_shared.dashboard
+                if Dashboard and Dashboard.showDashboardView then
+                    UIManager:close(menu)
+                    Dashboard.showDashboardView(injectStandaloneNavbar)
+                    return
+                end
+            end
+            menu._zen_navbar_height = new_h
+            vg[2] = new_nb
+            resizeStandaloneBody(new_h)
+            UIManager:setDirty(menu, "ui")
+        end
         menu[1] = FrameContainer:new{
             background = Blitbuffer.COLOR_WHITE,
             bordersize = 0,
@@ -1620,13 +1647,9 @@ local function apply_navbar()
             }
 
             local function repaintStandaloneNavbar()
-                local saved_active_local = active_tab
-                active_tab = view_tab_id
-                local new_nb = createNavBar()
-                active_tab = saved_active_local
-                if not new_nb then return end
-                vg[2] = new_nb  -- replace embedded navbar in VerticalGroup
-                UIManager:setDirty(menu, "ui")
+                if menu._zen_reinject_navbar then
+                    menu._zen_reinject_navbar()
+                end
             end
 
             local function focusStandaloneNavbar(vis_tabs)
@@ -2109,6 +2132,26 @@ local function apply_navbar()
             UIManager:setDirty(nil, "full")
         end
         UIManager:forceRePaint()
+    end
+
+    _G.__ZEN_UI_REINJECT_NAVBARS = function()
+        local stack = UIManager._window_stack
+        local top = stack and stack[#stack]
+        local top_widget = top and top.widget
+        local has_standalone_navbar = top_widget
+            and type(top_widget._zen_reinject_navbar) == "function"
+        if top_widget and type(top_widget._zen_reinject_navbar) == "function" then
+            top_widget:_zen_reinject_navbar()
+            UIManager:forceRePaint()
+        end
+        if has_standalone_navbar then
+            local fm = FileManager.instance
+            if fm then
+                injectNavbar(fm)
+            end
+        else
+            _G.__ZEN_UI_REINJECT_FM_NAVBAR()
+        end
     end
 end
 

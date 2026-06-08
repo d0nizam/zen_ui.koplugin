@@ -6,7 +6,7 @@ local _ = require("gettext")
 local UIManager = require("ui/uimanager")
 local Device = require("device")
 local ConfirmBox = require("ui/widget/confirmbox")
-local PresetStore = require("common/preset_store")
+local PresetStore = require("config/preset_store")
 local utils = require("modules/settings/zen_settings_utils")
 
 -- Disables the built-in autowarmth plugin if it's running, then prompts restart.
@@ -147,13 +147,6 @@ function M.build(ctx)
         end
     end
 
-    local function ensure_sleep_screen_config()
-        if type(config.sleep_screen) ~= "table" then
-            config.sleep_screen = { active_preset = nil }
-        end
-        return config.sleep_screen
-    end
-
     local function get_all_presets()
         local user = PresetStore.list("screensaver")
         local all = {}
@@ -211,10 +204,10 @@ function M.build(ctx)
                 "screensaver_stretch_limit_percentage",
                 preset.screensaver_stretch_limit_percentage)
         end
+        PresetStore.saveSettings("screensaver", capture_sleep_screen_state())
     end
 
     local function build_preset_items()
-        ensure_sleep_screen_config()
         local all = get_all_presets()
         local preset_items = {}
 
@@ -243,8 +236,8 @@ function M.build(ctx)
                                 UIManager:close(dlg)
                                 local state = capture_sleep_screen_state()
                                 PresetStore.save("screensaver", name, state)
-                                config.sleep_screen.active_preset = name
-                                plugin:saveConfig()
+                                PresetStore.saveSettings("screensaver", state)
+                                PresetStore.setActivePreset("screensaver", name)
                                 if touchmenu_instance then
                                     touchmenu_instance.item_table = build_preset_items()
                                     touchmenu_instance:updateItems()
@@ -265,14 +258,13 @@ function M.build(ctx)
             local is_last = (i == #all)
             table.insert(preset_items, {
                 text_func = function()
-                    local active = config.sleep_screen.active_preset
+                    local active = PresetStore.getActivePreset("screensaver")
                     local prefix = (active == pname) and "\u{2713} " or ""
                     return prefix .. pname
                 end,
                 callback = function(touchmenu_instance)
                     apply_sleep_screen_preset(preset)
-                    config.sleep_screen.active_preset = pname
-                    plugin:saveConfig()
+                    PresetStore.setActivePreset("screensaver", pname)
                     if touchmenu_instance then touchmenu_instance:updateItems() end
                 end,
                 hold_callback = not is_builtin and function(touchmenu_instance)
@@ -281,10 +273,9 @@ function M.build(ctx)
                         ok_text = _("Delete"),
                         ok_callback = function()
                             PresetStore.delete("screensaver", pname)
-                            if config.sleep_screen.active_preset == pname then
-                                config.sleep_screen.active_preset = nil
+                            if PresetStore.getActivePreset("screensaver") == pname then
+                                PresetStore.setActivePreset("screensaver", nil)
                             end
-                            plugin:saveConfig()
                             if touchmenu_instance then
                                 touchmenu_instance.item_table = build_preset_items()
                                 touchmenu_instance:updateItems()

@@ -1,5 +1,3 @@
-local dashboard_presets = require("common/dashboard_presets")
-
 local defaults = {
     _meta = {
         schema_version = 1,
@@ -85,6 +83,7 @@ local defaults = {
             menu = false,
         },
         tab_order = { "page_left", "books", "manga", "news", "authors", "series", "dashboard", "continue", "favorites", "history", "collections", "stats", "exit", "page_right", "menu" },
+        show_icons = true,
         show_labels = true,
         books_label = "Library",
         dashboard_label = "Home",
@@ -227,9 +226,6 @@ local defaults = {
         night_m     = 0,
         night_value = 5,
     },
-    sleep_screen = {
-        active_preset = nil,   -- name of currently active preset, or nil
-    },
     stats_page = {
         rows = { "today", "this_month", "this_year", "all_time", "library" },
     },
@@ -260,7 +256,6 @@ local defaults = {
             tags = {},
             to_be_read = {},
         },
-        dashboard_page = dashboard_presets.defaultDashboardPage(),
     },
     reader_page_browser = {
         layout = "grid",

@@ -15,6 +15,9 @@ msgstr "この章の残り%1分"
 msgid "%d%% Read"
 msgstr "%d%% 読了"
 
+msgid "%s left"
+msgstr "残り%s"
+
 msgid "(auto)"
 msgstr "(自動)"
 
@@ -489,6 +492,9 @@ msgstr "現在のホームフォルダ:"
 msgid "Current only"
 msgstr "現在のみ"
 
+msgid "Current/total pages"
+msgstr "現在/総ページ数"
+
 msgid "Custom"
 msgstr "カスタム"
 
@@ -906,6 +912,9 @@ msgstr "インストール済みのバージョンは最新リリースより新
 msgid "Installing"
 msgstr "インストール中"
 
+msgid "Interactive"
+msgstr "インタラクティブ"
+
 msgid "items per page"
 msgstr "ページあたりのアイテム数"
 
@@ -944,6 +953,9 @@ msgstr "最新"
 
 msgid "Leave empty to use action title"
 msgstr "アクションタイトルを使用する場合は空欄"
+
+msgid "Left"
+msgstr "左"
 
 msgid "Left items"
 msgstr "左アイテム"
@@ -1230,6 +1242,9 @@ msgstr "部分ページリフレッシュ"
 msgid "Paste"
 msgstr "貼り付け"
 
+msgid "Percent"
+msgstr "パーセント"
+
 msgid "percent - unopened - finished last"
 msgstr "パーセント - 未開封 - 読了を最後"
 
@@ -1274,6 +1289,9 @@ msgstr "進行状況"
 
 msgid "Progress bar"
 msgstr "進行状況バー"
+
+msgid "Progress labels"
+msgstr "進捗ラベル"
 
 msgid "Project: Title is not compatible with Zen UI."
 msgstr "「Project: Title」はZen UIと互換性がありません。"
@@ -1421,6 +1439,9 @@ msgstr "逆順"
 
 msgid "Review"
 msgstr "レビュー"
+
+msgid "Right"
+msgstr "右"
 
 msgid "Right items"
 msgstr "右アイテム"
@@ -1608,6 +1629,9 @@ msgstr "表紙の下にタイトルを表示 (モザイク)"
 msgid "Show top border"
 msgstr "上部の境界線を表示"
 
+msgid "Show top status bar"
+msgstr "上部ステータスバーを表示"
+
 msgid "Show warmth slider"
 msgstr "色温度スライダーを表示"
 
@@ -1782,6 +1806,9 @@ msgstr "時間"
 msgid "Time Format"
 msgstr "時刻形式"
 
+msgid "Time to book end"
+msgstr "本の終了までの時間"
+
 msgid "Title"
 msgstr "タイトル"
 
@@ -1808,6 +1835,9 @@ msgstr "上部ステータスバー"
 
 msgid "total books"
 msgstr "総冊数"
+
+msgid "Total pages"
+msgstr "総ページ数"
 
 msgid "total pages read"
 msgstr "総読了ページ数"

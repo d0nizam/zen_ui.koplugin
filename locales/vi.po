@@ -15,6 +15,9 @@ msgstr "%1 phút còn lại trong chương"
 msgid "%d%% Read"
 msgstr "%d%% Đã đọc"
 
+msgid "%s left"
+msgstr "còn %s"
+
 msgid "(auto)"
 msgstr "(tự động)"
 
@@ -489,6 +492,9 @@ msgstr "Thư mục home hiện tại:"
 msgid "Current only"
 msgstr "Chỉ hiện tại"
 
+msgid "Current/total pages"
+msgstr "Trang hiện tại/tổng"
+
 msgid "Custom"
 msgstr "Tùy chỉnh"
 
@@ -906,6 +912,9 @@ msgstr "Phiên bản đã cài mới hơn bản phát hành mới nhất."
 msgid "Installing"
 msgstr "Đang cài đặt"
 
+msgid "Interactive"
+msgstr "Tương tác"
+
 msgid "items per page"
 msgstr "mục mỗi trang"
 
@@ -944,6 +953,9 @@ msgstr "mới nhất"
 
 msgid "Leave empty to use action title"
 msgstr "Để trống để sử dụng tiêu đề hành động"
+
+msgid "Left"
+msgstr "Trái"
 
 msgid "Left items"
 msgstr "Các mục còn lại"
@@ -1230,6 +1242,9 @@ msgstr "Làm mới một phần trang"
 msgid "Paste"
 msgstr "Dán"
 
+msgid "Percent"
+msgstr "Phần trăm"
+
 msgid "percent - unopened - finished last"
 msgstr "phần trăm - chưa mở - hoàn thành cuối cùng"
 
@@ -1274,6 +1289,9 @@ msgstr "Tiến trình"
 
 msgid "Progress bar"
 msgstr "Thanh tiến độ"
+
+msgid "Progress labels"
+msgstr "Nhãn tiến độ"
 
 msgid "Project: Title is not compatible with Zen UI."
 msgstr "Dự án: Tiêu đề không tương thích với Zen UI."
@@ -1421,6 +1439,9 @@ msgstr "Sắp xếp ngược"
 
 msgid "Review"
 msgstr "Đánh giá"
+
+msgid "Right"
+msgstr "Phải"
 
 msgid "Right items"
 msgstr "Các mục bên phải"
@@ -1608,6 +1629,9 @@ msgstr "Hiển thị tiêu đề dưới bìa (mosaic)"
 msgid "Show top border"
 msgstr "Hiển thị viền trên"
 
+msgid "Show top status bar"
+msgstr "Hiện thanh trạng thái trên cùng"
+
 msgid "Show warmth slider"
 msgstr "Hiển thị thanh trượt nhiệt độ"
 
@@ -1782,6 +1806,9 @@ msgstr "Thời gian"
 msgid "Time Format"
 msgstr "Định dạng thời gian"
 
+msgid "Time to book end"
+msgstr "Thời gian đến hết sách"
+
 msgid "Title"
 msgstr "Tiêu đề"
 
@@ -1808,6 +1835,9 @@ msgstr "Thanh trạng thái trên"
 
 msgid "total books"
 msgstr "tổng số sách"
+
+msgid "Total pages"
+msgstr "Tổng số trang"
 
 msgid "total pages read"
 msgstr "tổng số trang đã đọc"

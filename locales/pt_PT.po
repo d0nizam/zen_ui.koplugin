@@ -15,6 +15,9 @@ msgstr "%1 min restantes no capítulo"
 msgid "%d%% Read"
 msgstr "%d%% lido"
 
+msgid "%s left"
+msgstr "%s restantes"
+
 msgid "(auto)"
 msgstr "(auto)"
 
@@ -489,6 +492,9 @@ msgstr "Pasta inicial atual:"
 msgid "Current only"
 msgstr "Apenas atual"
 
+msgid "Current/total pages"
+msgstr "Páginas atuais/totais"
+
 msgid "Custom"
 msgstr "Personalizado"
 
@@ -906,6 +912,9 @@ msgstr "A versão instalada é mais recente do que a última versão."
 msgid "Installing"
 msgstr "A instalar"
 
+msgid "Interactive"
+msgstr "Interativo"
+
 msgid "items per page"
 msgstr "itens por página"
 
@@ -944,6 +953,9 @@ msgstr "mais recente"
 
 msgid "Leave empty to use action title"
 msgstr "Deixar em branco para usar o título da ação"
+
+msgid "Left"
+msgstr "Esquerda"
 
 msgid "Left items"
 msgstr "Itens à esquerda"
@@ -1230,6 +1242,9 @@ msgstr "Atualização de páginas parciais"
 msgid "Paste"
 msgstr "Colar"
 
+msgid "Percent"
+msgstr "Percentagem"
+
 msgid "percent - unopened - finished last"
 msgstr "percentagem - não aberto - concluído por último"
 
@@ -1274,6 +1289,9 @@ msgstr "Progresso"
 
 msgid "Progress bar"
 msgstr "Barra de progresso"
+
+msgid "Progress labels"
+msgstr "Etiquetas de progresso"
 
 msgid "Project: Title is not compatible with Zen UI."
 msgstr "Project: Title não é compatível com o Zen UI."
@@ -1421,6 +1439,9 @@ msgstr "Ordenação inversa"
 
 msgid "Review"
 msgstr "Crítica"
+
+msgid "Right"
+msgstr "Direita"
 
 msgid "Right items"
 msgstr "Itens à direita"
@@ -1608,6 +1629,9 @@ msgstr "Show title below cover (mosaic)"
 msgid "Show top border"
 msgstr "Mostrar margem superior"
 
+msgid "Show top status bar"
+msgstr "Mostrar barra de estado superior"
+
 msgid "Show warmth slider"
 msgstr "Mostrar controlo deslizante de calor"
 
@@ -1782,6 +1806,9 @@ msgstr "Hora"
 msgid "Time Format"
 msgstr "Formato de hora"
 
+msgid "Time to book end"
+msgstr "Tempo até ao fim do livro"
+
 msgid "Title"
 msgstr "Título"
 
@@ -1808,6 +1835,9 @@ msgstr "Barra de estado superior"
 
 msgid "total books"
 msgstr "total de livros"
+
+msgid "Total pages"
+msgstr "Total de páginas"
 
 msgid "total pages read"
 msgstr "páginas totais lidas"

@@ -11,6 +11,7 @@ local M = {}
 local _ = require("gettext")
 local T = require("ffi/util").template
 local paths = require("common/paths")
+local PresetStore = require("config/preset_store")
 
 local _plugin_root = require("common/plugin_root") or ""
 
@@ -767,11 +768,8 @@ function M.build_install_pages(ctx)
                 end
                 if preset then
                     apply_screensaver_preset(preset)
-                    if type(config.sleep_screen) ~= "table" then
-                        config.sleep_screen = { active_preset = nil }
-                    end
-                    config.sleep_screen.active_preset = preset.name
-                    plugin:saveConfig()
+                    PresetStore.saveSettings("screensaver", preset)
+                    PresetStore.setActivePreset("screensaver", preset.name)
                 end
             end,
         },

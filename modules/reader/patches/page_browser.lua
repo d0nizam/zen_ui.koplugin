@@ -110,8 +110,8 @@ local function apply_page_browser()
         local Size            = require("ui/size")
         local Screen          = Device.screen
         local GestureRange    = require("ui/gesturerange")
-        local ZenSlider       = require("common/zen_slider")
-        local ZenIconButton   = require("common/zen_icon_button")
+        local ZenSlider       = require("common/ui/zen_slider")
+        local ZenIconButton   = require("common/ui/zen_icon_button")
         local logger          = require("logger")
 
         -- ----------------------------------------------------------------

@@ -1,5 +1,7 @@
 local defaults = require("config/defaults")
-local PresetStore = require("common/preset_store")
+local DashboardPresets = require("modules/filebrowser/patches/dashboard/dashboard_presets")
+local PresetStore = require("config/preset_store")
+local DashboardQuotes = require("modules/filebrowser/patches/dashboard/dashboard_quotes")
 local utils = require("common/utils")
 
 local LEGACY_KEY = "zen_ui_config"  -- legacy G_reader_settings key; cleanup only
@@ -505,6 +507,31 @@ local function migrate_bim_folder_cover_keys(cfg)
     return cfg, true  -- always save: marks migration as attempted
 end
 
+local function capture_screensaver_settings()
+    local g = rawget(_G, "G_reader_settings")
+    if not g then return {} end
+    return {
+        screensaver_type = g:readSetting("screensaver_type"),
+        screensaver_message = g:readSetting("screensaver_message"),
+        screensaver_show_message = g:isTrue("screensaver_show_message"),
+        screensaver_img_background = g:readSetting("screensaver_img_background"),
+        screensaver_document_cover = g:readSetting("screensaver_document_cover"),
+        screensaver_stretch_images = g:isTrue("screensaver_stretch_images"),
+        screensaver_stretch_limit_percentage = g:readSetting("screensaver_stretch_limit_percentage"),
+    }
+end
+
+local function migrate_settings_files()
+    local changed = PresetStore.migrateStores({
+        dashboard = DashboardPresets.defaultDashboardPage(),
+        screensaver = capture_screensaver_settings(),
+    })
+    if DashboardQuotes.ensureFile() then
+        changed = true
+    end
+    return changed
+end
+
 function M.get()
     return _current_config
 end
@@ -536,7 +563,9 @@ function M.load()
     cfg, migrated_updater = migrate_legacy_updater_keys(cfg)
     cfg, migrated_fbc     = migrate_folder_cover_keys(cfg)
     cfg, migrated_bim     = migrate_bim_folder_cover_keys(cfg)
-    if migrated_group or migrated_updater or migrated_fbc or migrated_bim or migrated_qs or migrated_file_config then
+    local migrated_settings_files = migrate_settings_files()
+    if migrated_group or migrated_updater or migrated_fbc or migrated_bim
+            or migrated_qs or migrated_file_config or migrated_settings_files then
         M.save(cfg)
     end
     if migrated_file_config then

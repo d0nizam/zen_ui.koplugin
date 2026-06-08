@@ -7,7 +7,7 @@ local function apply_zen_scroll_bar()
     local Menu    = require("ui/widget/menu")
     local Screen  = Device.screen
     local UIManager = require("ui/uimanager")
-    local pager   = require("common/zen_pager")
+    local pager   = require("common/ui/zen_pager")
     pager.setPlugin(rawget(_G, "__ZEN_UI_PLUGIN"))
     local target_menus = {
         filemanager = true,
@@ -112,7 +112,7 @@ local function apply_zen_scroll_bar()
                 screen_zone = { ratio_x = rz_center_x, ratio_y = rz_y, ratio_w = rz_center_w, ratio_h = rz_h },
                 handler = function()
                     if pager.getStyle() ~= "page_number" then return end
-                    local createZenDialog = require("common/zen_dialog")
+                    local createZenDialog = require("common/ui/zen_dialog")
                     local nb     = menu.page_num or 1
                     local dialog = createZenDialog{
                         title           = _("Go to page"),

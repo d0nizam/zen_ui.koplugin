@@ -24,6 +24,9 @@ msgstr "%1 мин. до края на главата"
 msgid "%d%% Read"
 msgstr "%d%% Прочетено"
 
+msgid "%s left"
+msgstr "остават %s"
+
 msgid "(auto)"
 msgstr "(авто)"
 
@@ -498,6 +501,9 @@ msgstr "Текуща начална папка:"
 msgid "Current only"
 msgstr "Само текущата"
 
+msgid "Current/total pages"
+msgstr "Текущи/общо страници"
+
 msgid "Custom"
 msgstr "По избор"
 
@@ -915,6 +921,9 @@ msgstr "Инсталираната версия е по-нова от после
 msgid "Installing"
 msgstr "Инсталиране"
 
+msgid "Interactive"
+msgstr "Интерактивно"
+
 msgid "items per page"
 msgstr "елемента на страница"
 
@@ -953,6 +962,9 @@ msgstr "най-нови"
 
 msgid "Leave empty to use action title"
 msgstr "Оставете празно за заглавие на действието"
+
+msgid "Left"
+msgstr "Отляво"
 
 msgid "Left items"
 msgstr "Леви елементи"
@@ -1239,6 +1251,9 @@ msgstr "Частично опресняване на страниците"
 msgid "Paste"
 msgstr "Поставяне"
 
+msgid "Percent"
+msgstr "Процент"
+
 msgid "percent - unopened - finished last"
 msgstr "процент - неотворените - завършените накрая"
 
@@ -1283,6 +1298,9 @@ msgstr "Напредък"
 
 msgid "Progress bar"
 msgstr "Лента за напредък"
+
+msgid "Progress labels"
+msgstr "Етикети за напредък"
 
 msgid "Project: Title is not compatible with Zen UI."
 msgstr "Project: Title не е съвместим с Zen UI."
@@ -1430,6 +1448,9 @@ msgstr "Обратно сортиране"
 
 msgid "Review"
 msgstr "Преглед"
+
+msgid "Right"
+msgstr "Отдясно"
 
 msgid "Right items"
 msgstr "Десни елементи"
@@ -1617,6 +1638,9 @@ msgstr "Show title below cover (mosaic)"
 msgid "Show top border"
 msgstr "Показване на горна граница"
 
+msgid "Show top status bar"
+msgstr "Показване на горната лента на състоянието"
+
 msgid "Show warmth slider"
 msgstr "Показване на плъзгач за топлина"
 
@@ -1791,6 +1815,9 @@ msgstr "Време"
 msgid "Time Format"
 msgstr "Формат на часа"
 
+msgid "Time to book end"
+msgstr "Време до края на книгата"
+
 msgid "Title"
 msgstr "Заглавие"
 
@@ -1817,6 +1844,9 @@ msgstr "Горна лента за състояние"
 
 msgid "total books"
 msgstr "общо книги"
+
+msgid "Total pages"
+msgstr "Общо страници"
 
 msgid "total pages read"
 msgstr "общо прочетени страници"

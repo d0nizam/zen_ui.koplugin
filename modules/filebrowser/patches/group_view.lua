@@ -596,7 +596,7 @@ local function patch_list_item()
     local CoverUtils      = require("common/cover_utils")
     local CenterContainer = require("ui/widget/container/centercontainer")
     local Device          = require("device")
-    local library_font    = require("common/library_font")
+    local library_font    = require("modules/filebrowser/patches/library_font")
     local FrameContainer  = require("ui/widget/container/framecontainer")
     local HorizontalGroup = require("ui/widget/horizontalgroup")
     local HorizontalSpan  = require("ui/widget/horizontalspan")
@@ -981,9 +981,8 @@ local function showDisplayModeDialog(menu, tab_id)
         end
 
         -- Rebuild in-place: swap methods for the new mode, then redraw once.
-        if menu then
-            local is_group = menu._zen_group_view or false
-            local new_mode_type = setup_display_mode(menu, is_group, tab_id)
+        local function _rebuild_menu(m, is_group, t_id)
+            local new_mode_type = setup_display_mode(m, is_group, t_id)
             if new_mode_type == "mosaic" then
                 patch_mosaic_item()
             elseif new_mode_type == "list" then
@@ -991,12 +990,30 @@ local function showDisplayModeDialog(menu, tab_id)
             else
                 -- Classic mode: restore base Menu methods
                 local Menu_class = require("ui/widget/menu")
-                menu.updateItems         = Menu_class.updateItems
-                menu._updateItemsBuildUI = nil
-                menu._recalculateDimen   = nil
-                menu.display_mode_type   = nil
+                m.updateItems         = Menu_class.updateItems
+                m._updateItemsBuildUI = nil
+                m._recalculateDimen   = nil
+                m.display_mode_type   = nil
             end
-            menu:updateItems()
+            m:updateItems()
+        end
+        if menu then
+            _rebuild_menu(menu, menu._zen_group_view or false, tab_id)
+        end
+        -- Also rebuild the root group menu when changing from within a detail view,
+        -- otherwise going back shows stale rendering with the old display mode.
+        if tab_id then
+            local root_menu
+            if tab_id == "authors" then
+                root_menu = _authors_menu
+            elseif tab_id == "tags" then
+                root_menu = _tags_menu
+            else
+                root_menu = _series_menu
+            end
+            if root_menu and root_menu ~= menu then
+                _rebuild_menu(root_menu, true, tab_id)
+            end
         end
     end
 

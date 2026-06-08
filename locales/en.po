@@ -15,6 +15,9 @@ msgstr "%1 mins left in chapter"
 msgid "%d%% Read"
 msgstr "%d%% Read"
 
+msgid "%s left"
+msgstr "%s left"
+
 msgid "(auto)"
 msgstr "(auto)"
 
@@ -489,6 +492,9 @@ msgstr "Current home folder:"
 msgid "Current only"
 msgstr "Current only"
 
+msgid "Current/total pages"
+msgstr "Current/total pages"
+
 msgid "Custom"
 msgstr "Custom"
 
@@ -906,6 +912,9 @@ msgstr "Installed version is newer than the latest release."
 msgid "Installing"
 msgstr "Installing"
 
+msgid "Interactive"
+msgstr "Interactive"
+
 msgid "items per page"
 msgstr "items per page"
 
@@ -944,6 +953,9 @@ msgstr "latest"
 
 msgid "Leave empty to use action title"
 msgstr "Leave empty to use action title"
+
+msgid "Left"
+msgstr "Left"
 
 msgid "Left items"
 msgstr "Left items"
@@ -1230,6 +1242,9 @@ msgstr "Partial pages refresh"
 msgid "Paste"
 msgstr "Paste"
 
+msgid "Percent"
+msgstr "Percent"
+
 msgid "percent - unopened - finished last"
 msgstr "percent - unopened - finished last"
 
@@ -1274,6 +1289,9 @@ msgstr "Progress"
 
 msgid "Progress bar"
 msgstr "Progress bar"
+
+msgid "Progress labels"
+msgstr "Progress labels"
 
 msgid "Project: Title is not compatible with Zen UI."
 msgstr "Project: Title is not compatible with Zen UI."
@@ -1421,6 +1439,9 @@ msgstr "Reverse sorting"
 
 msgid "Review"
 msgstr "Review"
+
+msgid "Right"
+msgstr "Right"
 
 msgid "Right items"
 msgstr "Right items"
@@ -1608,6 +1629,9 @@ msgstr "Show title below cover (mosaic)"
 msgid "Show top border"
 msgstr "Show top border"
 
+msgid "Show top status bar"
+msgstr "Show top status bar"
+
 msgid "Show warmth slider"
 msgstr "Show warmth slider"
 
@@ -1782,6 +1806,9 @@ msgstr "Time"
 msgid "Time Format"
 msgstr "Time Format"
 
+msgid "Time to book end"
+msgstr "Time to book end"
+
 msgid "Title"
 msgstr "Title"
 
@@ -1808,6 +1835,9 @@ msgstr "Top status bar"
 
 msgid "total books"
 msgstr "total books"
+
+msgid "Total pages"
+msgstr "Total pages"
 
 msgid "total pages read"
 msgstr "total pages read"

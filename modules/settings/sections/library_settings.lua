@@ -61,13 +61,13 @@ local function ensure_library_font_cfg(config)
     return config.library_font
 end
 
-local function save_library_font(config, plugin, touchmenu_instance)
+local function save_library_font(config, plugin, touchmenu_instance, prompt_restart)
     _G.__ZEN_UI_LIBRARY_FONT_CFG = config.library_font
     plugin:saveConfig()
     settings_apply.reinit_filemanager()
     schedule_dashboard_rebuild_on_menu_close(plugin)
     local strip_cfg = type(config.mosaic_title_strip) == "table" and config.mosaic_title_strip or nil
-    if strip_cfg and (strip_cfg.show_title == true or strip_cfg.show_author == true) then
+    if prompt_restart or (strip_cfg and (strip_cfg.show_title == true or strip_cfg.show_author == true)) then
         settings_apply.prompt_restart()
     end
     if touchmenu_instance then
@@ -155,7 +155,7 @@ function M.build(ctx)
                         callback = function(file)
                             if cfg.font_face ~= file then
                                 cfg.font_face = file
-                                save_library_font(config, plugin, touchmenu_instance)
+                                save_library_font(config, plugin, touchmenu_instance, true)
                             end
                         end,
                     })
@@ -164,7 +164,7 @@ function M.build(ctx)
                     local cfg = ensure_library_font_cfg(config)
                     if cfg.font_face ~= "default" then
                         cfg.font_face = "default"
-                        save_library_font(config, plugin, touchmenu_instance)
+                        save_library_font(config, plugin, touchmenu_instance, true)
                     end
                 end,
             },
@@ -172,8 +172,11 @@ function M.build(ctx)
                 text = _("Use default font"),
                 callback = function(touchmenu_instance)
                     local cfg = ensure_library_font_cfg(config)
-                    cfg.font_face = "default"
-                    save_library_font(config, plugin, touchmenu_instance)
+                    local changed = cfg.font_face ~= "default"
+                    if changed then
+                        cfg.font_face = "default"
+                        save_library_font(config, plugin, touchmenu_instance, true)
+                    end
                 end,
             },
         },
@@ -616,7 +619,7 @@ function M.build(ctx)
     end
 
     local display_mode_sub_items = {}
-    for _, entry in ipairs(display_modes) do
+    for _i, entry in ipairs(display_modes) do
         table.insert(display_mode_sub_items, {
             text = entry.text,
             checked_func = function() return get_display_mode() == entry.mode end,
@@ -860,7 +863,7 @@ function M.build(ctx)
     end
 
     local collate_sub_items = {}
-    for _, option in ipairs(collate_options) do
+    for _i, option in ipairs(collate_options) do
         table.insert(collate_sub_items, {
             text = option.text,
             checked_func = function() return get_current_collate() == option.key end,
@@ -914,7 +917,7 @@ function M.build(ctx)
     end
 
     local scroll_bar_sub_items = {}
-    for _, entry in ipairs(scroll_bar_styles) do
+    for _i, entry in ipairs(scroll_bar_styles) do
         table.insert(scroll_bar_sub_items, {
             text = entry.text,
             checked_func = function() return get_scroll_bar_style() == entry.style end,
@@ -941,7 +944,7 @@ function M.build(ctx)
             and config.zen_scroll_bar.page_number_format) or "current"
     end
     local pn_format_sub_items = {}
-    for _, entry in ipairs(pn_formats) do
+    for _i, entry in ipairs(pn_formats) do
         table.insert(pn_format_sub_items, {
             text = entry.text,
             checked_func = function() return get_pn_format() == entry.fmt end,
@@ -972,7 +975,7 @@ function M.build(ctx)
             and config.zen_scroll_bar.hold_skip) or "10"
     end
     local hold_skip_sub_items = {}
-    for _, entry in ipairs(hold_skip_opts) do
+    for _i, entry in ipairs(hold_skip_opts) do
         table.insert(hold_skip_sub_items, {
             text = entry.text,
             checked_func = function() return get_hold_skip() == entry.skip end,
@@ -1090,7 +1093,7 @@ function M.build(ctx)
                                     if type(config.additional_home_dirs) ~= "table" then
                                         config.additional_home_dirs = {}
                                     end
-                                    for _, existing in ipairs(config.additional_home_dirs) do
+                                    for _i, existing in ipairs(config.additional_home_dirs) do
                                         if existing == dir_path then return end
                                     end
                                     table.insert(config.additional_home_dirs, dir_path)

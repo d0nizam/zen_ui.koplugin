@@ -26,7 +26,7 @@ local function apply_browser_folder_cover()
     local VerticalSpan = require("ui/widget/verticalspan")
     local lfs = require("libs/libkoreader-lfs")
     local paths = require("common/paths")
-    local library_font = require("common/library_font")
+    local library_font = require("modules/filebrowser/patches/library_font")
     local utils = require("common/utils")
 
     local _ = require("gettext")
@@ -616,9 +616,7 @@ local function apply_browser_folder_cover()
                         local cover_bb_copy = ancestor_bi.cover_bb:copy()
                         local border = Folder.face.border_size
                         local max_w = self.width - 2 * border
-                        local strip_h = (not MosaicMenuItem._zen_in_init)
-                            and (rawget(MosaicMenuItem, "_zen_strip_h") or 0) or 0
-                        local eff_h = self.height - strip_h
+                        local eff_h = self.height
                         local bh = eff_h - 2 * border
                         local portrait_w, portrait_h = Cover.calcDims(max_w, bh)
                         local cover_frame = FrameContainer:new {
@@ -660,9 +658,7 @@ local function apply_browser_folder_cover()
                         and (bookinfo.ignore_cover or not bookinfo.has_cover)) then
                     local border = Folder.face.border_size
                     local max_w = self.width - 2 * border
-                    local strip_h = (not MosaicMenuItem._zen_in_init)
-                        and (rawget(MosaicMenuItem, "_zen_strip_h") or 0) or 0
-                    local eff_h = self.height - strip_h
+                    local eff_h = self.height
                     local bh = eff_h - 2 * border
                     local portrait_w, portrait_h = Cover.calcDims(max_w, bh)
                     local dimen = { w = portrait_w + 2 * border, h = portrait_h + 2 * border }
@@ -733,9 +729,7 @@ local function apply_browser_folder_cover()
                 self._zen_render_night = Device.screen.night_mode
                 local border = Folder.face.border_size
                 local max_w = self.width - 2 * border
-                local strip_h = (not MosaicMenuItem._zen_in_init)
-                    and (rawget(MosaicMenuItem, "_zen_strip_h") or 0) or 0
-                local eff_h = self.height - strip_h
+                local eff_h = self.height
                 local bh = eff_h - 2 * border
                 local portrait_w, portrait_h = Cover.calcDims(max_w, bh)
                 local dimen = { w = portrait_w + 2 * border, h = portrait_h + 2 * border }
@@ -801,9 +795,10 @@ local function apply_browser_folder_cover()
                 or (self.menu.genItemTableFromPath and self.menu)
 
             -- Use unified makeCover - auto-detects cover files and collects book covers
+            local eff_h = self.height
             local border = Folder.face.border_size
             local max_w = self.width - 2 * border
-            local bh = self.height - 2 * border
+            local bh = eff_h - 2 * border
             local folder_name = dir_path:match("([^/]+)/?$") or dir_path
             folder_name = BD.directory(folder_name)
 
@@ -841,9 +836,7 @@ local function apply_browser_folder_cover()
         function MosaicMenuItem:_setFolderCover(img)
             local border = Folder.face.border_size
             local max_w = self.width - 2 * border
-            local strip_h = (not MosaicMenuItem._zen_in_init)
-                and (rawget(MosaicMenuItem, "_zen_strip_h") or 0) or 0
-            local eff_h = self.height - strip_h
+            local eff_h = self.height
             local bh = eff_h - 2 * border
             local portrait_w, portrait_h = Cover.calcDims(max_w, bh)
             local dimen = { w = portrait_w + 2 * border, h = portrait_h + 2 * border }
@@ -927,7 +920,7 @@ local function apply_browser_folder_cover()
                     local line1_w = math.max(0, math.floor(dimen.w * (Folder.edge.width ^ 2)) - 2 * line_inset)
                     local line2_w = math.max(0, math.floor(dimen.w * Folder.edge.width) - 2 * line_inset)
                     decoration_layer = TopContainer:new {
-                        dimen = { w = self.width, h = self.height },
+                        dimen = { w = self.width, h = eff_h },
                         VerticalGroup:new {
                             VerticalSpan:new { width = centered_top - top_h },
                             CenterContainer:new {
@@ -975,7 +968,7 @@ local function apply_browser_folder_cover()
             end
 
             local widget = OverlapGroup:new {
-                dimen = { w = self.width, h = self.height },
+                dimen = { w = self.width, h = eff_h },
                 VerticalGroup:new {
                     VerticalSpan:new { width = centered_top },
                     CenterContainer:new {

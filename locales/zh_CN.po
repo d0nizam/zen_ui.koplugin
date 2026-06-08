@@ -15,6 +15,9 @@ msgstr "本章剩余 %1 分钟"
 msgid "%d%% Read"
 msgstr "已读 %d%%"
 
+msgid "%s left"
+msgstr "剩余 %s"
+
 msgid "(auto)"
 msgstr "（自动）"
 
@@ -489,6 +492,9 @@ msgstr "当前主目录："
 msgid "Current only"
 msgstr "仅当前"
 
+msgid "Current/total pages"
+msgstr "当前/总页数"
+
 msgid "Custom"
 msgstr "自定义"
 
@@ -906,6 +912,9 @@ msgstr "已安装版本高于最新发布版本。"
 msgid "Installing"
 msgstr "正在安装"
 
+msgid "Interactive"
+msgstr "交互式"
+
 msgid "items per page"
 msgstr "每页项目数"
 
@@ -944,6 +953,9 @@ msgstr "最新版本"
 
 msgid "Leave empty to use action title"
 msgstr "留空以使用操作标题"
+
+msgid "Left"
+msgstr "左侧"
 
 msgid "Left items"
 msgstr "左侧项目"
@@ -1230,6 +1242,9 @@ msgstr "局部页面刷新"
 msgid "Paste"
 msgstr "粘贴"
 
+msgid "Percent"
+msgstr "百分比"
+
 msgid "percent - unopened - finished last"
 msgstr "进度 - 未打开 - 已完成排最后"
 
@@ -1274,6 +1289,9 @@ msgstr "进度"
 
 msgid "Progress bar"
 msgstr "进度条"
+
+msgid "Progress labels"
+msgstr "进度标签"
 
 msgid "Project: Title is not compatible with Zen UI."
 msgstr "Project: Title 与 禅 UI 不兼容。"
@@ -1421,6 +1439,9 @@ msgstr "反向排序"
 
 msgid "Review"
 msgstr "书评"
+
+msgid "Right"
+msgstr "右侧"
 
 msgid "Right items"
 msgstr "右侧项目"
@@ -1608,6 +1629,9 @@ msgstr "Show title below cover (mosaic)"
 msgid "Show top border"
 msgstr "显示顶部边框"
 
+msgid "Show top status bar"
+msgstr "显示顶部状态栏"
+
 msgid "Show warmth slider"
 msgstr "显示色温滑块"
 
@@ -1782,6 +1806,9 @@ msgstr "时间"
 msgid "Time Format"
 msgstr "时间格式"
 
+msgid "Time to book end"
+msgstr "到读完本书的时间"
+
 msgid "Title"
 msgstr "标题"
 
@@ -1808,6 +1835,9 @@ msgstr "顶部状态栏"
 
 msgid "total books"
 msgstr "总书籍数"
+
+msgid "Total pages"
+msgstr "总页数"
 
 msgid "total pages read"
 msgstr "总阅读页数"

@@ -1,8 +1,8 @@
 local _ = require("gettext")
 local UIManager = require("ui/uimanager")
 
-local DashboardPresets = require("common/dashboard_presets")
-local PresetStore = require("common/preset_store")
+local DashboardPresets = require("modules/filebrowser/patches/dashboard/dashboard_presets")
+local PresetStore = require("config/preset_store")
 local Registry = require("modules/filebrowser/patches/dashboard/components/registry")
 
 local M = {}
@@ -25,6 +25,11 @@ local DEFAULT_ENABLED = {
     featured_recent = true,
     quotes = true,
     strip_recent = true,
+}
+
+local DEFAULT_FEATURED_PROGRESS_META = {
+    left = "percent",
+    right = "total_pages",
 }
 
 local function copy_default_order()
@@ -64,12 +69,36 @@ local function ensure_featured_cfg(dcfg, module_id)
     local mcfg = ensure_module_cfg(dcfg, module_id)
     mcfg.order = normalize_order(mcfg.order)
     if mcfg.show_description == nil then mcfg.show_description = true end
+    if mcfg.interactive == nil then mcfg.interactive = true end
+    if mcfg.show_status_bar == nil then mcfg.show_status_bar = false end
+    if mcfg.status_bar_show_bottom_border == nil then mcfg.status_bar_show_bottom_border = true end
+    if mcfg.status_bar_bold_text == nil then mcfg.status_bar_bold_text = true end
+    if type(mcfg.progress_meta) ~= "table" then mcfg.progress_meta = {} end
+    if mcfg.progress_meta.left == nil and mcfg.progress_meta.right == nil then
+        for key, side in pairs(mcfg.progress_meta) do
+            if side == "left" and mcfg.progress_meta.left == nil then
+                mcfg.progress_meta.left = key
+            elseif side == "right" and mcfg.progress_meta.right == nil then
+                mcfg.progress_meta.right = key
+            end
+        end
+    end
+    for side, metric in pairs(DEFAULT_FEATURED_PROGRESS_META) do
+        if mcfg.progress_meta[side] ~= "total_pages"
+                and mcfg.progress_meta[side] ~= "current_total"
+                and mcfg.progress_meta[side] ~= "percent"
+                and mcfg.progress_meta[side] ~= "time_left"
+                and mcfg.progress_meta[side] ~= "off" then
+            mcfg.progress_meta[side] = metric
+        end
+    end
     return mcfg
 end
 
 local function ensure_strip_cfg(dcfg, module_id)
     local mcfg = ensure_module_cfg(dcfg, module_id)
     mcfg.order = normalize_order(mcfg.order)
+    if mcfg.interactive == nil then mcfg.interactive = true end
     if type(mcfg.count) ~= "number" then mcfg.count = 5 end
     if mcfg.count < 3 then mcfg.count = 3 end
     if mcfg.count > 5 then mcfg.count = 5 end
@@ -92,10 +121,11 @@ local function ensure_dashboard_widget_cfg(dcfg)
     ensure_strip_cfg(dcfg, "strip_recent")
 end
 
-local function ensure_cfg(config)
-    if type(config.group_view) ~= "table" then config.group_view = {} end
-    if type(config.group_view.dashboard_page) ~= "table" then config.group_view.dashboard_page = {} end
-    local dcfg = config.group_view.dashboard_page
+local function ensure_cfg(_config)
+    local dcfg = PresetStore.getSettings("dashboard")
+    if type(dcfg) ~= "table" or next(dcfg) == nil then
+        dcfg = DashboardPresets.defaultDashboardPage()
+    end
     DashboardPresets.ensurePresetState(dcfg)
 
     if type(dcfg.rows) ~= "table" then dcfg.rows = {} end
@@ -134,6 +164,8 @@ local function ensure_cfg(config)
     end
     dcfg.rows.enabled = normalized_enabled
     dcfg.rows.max_rows = 5
+
+    if dcfg.show_status_bar == nil then dcfg.show_status_bar = true end
 
     if type(dcfg.middle_stats_triplet) ~= "table" then
         dcfg.middle_stats_triplet = { "today_pages", "today_duration", "streak" }
@@ -178,6 +210,9 @@ local function list_ids()
     return ids
 end
 
+local dashboard_max_widgets = 5
+local custom_strip_max_books = 50
+
 local function sort_order_with_defaults(order)
     local ids = list_ids()
     local seen = {}
@@ -209,14 +244,13 @@ end
 
 function M.build(ctx)
     local config = ctx.config
-    local plugin = ctx.plugin
     local dcfg = ensure_cfg(config)
     local dashboard_rebuild_pending = false
     local dashboard_rebuild_poll_active = false
     local schedule_dashboard_rebuild_on_menu_close
 
     local function save_dashboard()
-        plugin:saveConfig()
+        PresetStore.saveSettings("dashboard", dcfg)
         dashboard_rebuild_pending = true
         schedule_dashboard_rebuild_on_menu_close()
     end
@@ -225,23 +259,38 @@ function M.build(ctx)
         local ok_fm, FileManager = pcall(require, "apps/filemanager/filemanager")
         if not ok_fm or not FileManager or not FileManager.instance then return false end
         local fm = FileManager.instance
-        return fm.menu ~= nil and fm.menu.menu_container ~= nil
+        local menu = fm.menu
+        if not menu then return false end
+        local menu_container = menu.menu_container
+        local stack = UIManager._window_stack
+        if not stack then return false end
+        for _i, entry in ipairs(stack) do
+            local widget = entry and entry.widget
+            if widget == menu or (menu_container and widget == menu_container) then return true end
+        end
+        return false
     end
 
     schedule_dashboard_rebuild_on_menu_close = function()
         if dashboard_rebuild_poll_active then return end
         dashboard_rebuild_poll_active = true
         local function tick()
-            if is_filemanager_menu_open() then
+            local plugin = ctx.plugin or rawget(_G, "__ZEN_UI_PLUGIN")
+            local dash = plugin
+                and plugin._zen_shared
+                and plugin._zen_shared.dashboard
+            local dashboard_waiting = dash
+                and dash.hasActive
+                and dash.hasActive()
+                and dash.isActiveOnTop
+                and not dash.isActiveOnTop()
+            if is_filemanager_menu_open() or dashboard_waiting then
                 UIManager:scheduleIn(0.25, tick)
                 return
             end
             dashboard_rebuild_poll_active = false
             if not dashboard_rebuild_pending then return end
             dashboard_rebuild_pending = false
-            local dash = ctx.plugin
-                and ctx.plugin._zen_shared
-                and ctx.plugin._zen_shared.dashboard
             if dash and dash.rebuildActive then
                 dash.rebuildActive()
             end
@@ -260,6 +309,21 @@ function M.build(ctx)
         { id = "reverse", text = _("Reverse") },
     }
 
+    local progress_label_options = {
+        { id = "off", text = _("Off") },
+        { id = "percent", text = _("Percent") },
+        { id = "time_left", text = _("Time to book end") },
+        { id = "current_total", text = _("Current/total pages") },
+        { id = "total_pages", text = _("Total pages") },
+    }
+
+    local function progress_label(metric)
+        for _i, opt in ipairs(progress_label_options) do
+            if opt.id == metric then return opt.text end
+        end
+        return _("Off")
+    end
+
     local function build_order_items(mcfg)
         local items = {}
         for _i, opt in ipairs(order_options) do
@@ -277,6 +341,94 @@ function M.build(ctx)
             }
         end
         return items
+    end
+
+    local function build_progress_meta_items(mcfg)
+        if type(mcfg.progress_meta) ~= "table" then mcfg.progress_meta = {} end
+        local function side_items(side)
+            local items = {}
+            for _i, opt in ipairs(progress_label_options) do
+                local metric = opt.id
+                items[#items + 1] = {
+                    text = opt.text,
+                    radio = true,
+                    checked_func = function()
+                        return (mcfg.progress_meta[side] or "off") == metric
+                    end,
+                    callback = function()
+                        mcfg.progress_meta[side] = metric
+                        save_dashboard("reinit")
+                    end,
+                }
+            end
+            return items
+        end
+        return {
+            {
+                text_func = function()
+                    return _("Left") .. ": " .. progress_label(mcfg.progress_meta.left)
+                end,
+                sub_item_table = side_items("left"),
+            },
+            {
+                text_func = function()
+                    return _("Right") .. ": " .. progress_label(mcfg.progress_meta.right)
+                end,
+                sub_item_table = side_items("right"),
+            },
+        }
+    end
+
+    local function interactive_item(mcfg)
+        return {
+            text = _("Interactive"),
+            checked_func = function()
+                return mcfg.interactive ~= false
+            end,
+            callback = function()
+                mcfg.interactive = mcfg.interactive == false
+                save_dashboard("reinit")
+            end,
+        }
+    end
+
+    local function featured_status_bar_item(mcfg)
+        return {
+            text = _("Show top status bar"),
+            checked_func = function()
+                return mcfg.show_status_bar == true
+            end,
+            callback = function()
+                mcfg.show_status_bar = mcfg.show_status_bar ~= true
+                save_dashboard("reinit")
+            end,
+        }
+    end
+
+    local function featured_status_bar_options(mcfg)
+        return {
+            featured_status_bar_item(mcfg),
+            {
+                text = _("Show bottom border"),
+                checked_func = function()
+                    return mcfg.status_bar_show_bottom_border ~= false
+                end,
+                callback = function()
+                    mcfg.status_bar_show_bottom_border = mcfg.status_bar_show_bottom_border == false
+                    save_dashboard("reinit")
+                end,
+            },
+            {
+                text = _("Bold text"),
+                checked_func = function()
+                    return mcfg.status_bar_bold_text ~= false
+                end,
+                callback = function()
+                    mcfg.status_bar_bold_text = mcfg.status_bar_bold_text == false
+                    save_dashboard("reinit")
+                end,
+            },
+        }
     end
 
     local function path_label(path)
@@ -336,6 +488,11 @@ function M.build(ctx)
                     end)
                 end,
             },
+            interactive_item(mcfg),
+            {
+                text = _("Top status bar"),
+                sub_item_table = featured_status_bar_options(mcfg),
+            },
             {
                 text = _("Show description"),
                 checked_func = function()
@@ -345,6 +502,10 @@ function M.build(ctx)
                     mcfg.show_description = mcfg.show_description == false
                     save_dashboard("reinit")
                 end,
+            },
+            {
+                text = _("Progress labels"),
+                sub_item_table = build_progress_meta_items(mcfg),
             },
             {
                 text = _("Clear book"),
@@ -372,11 +533,12 @@ function M.build(ctx)
                     save_dashboard("reinit")
                 end,
             },
+            interactive_item(mcfg),
             {
                 text = _("Add book"),
                 keep_menu_open = true,
                 enabled_func = function()
-                    return #mcfg.paths < 5
+                    return #mcfg.paths < custom_strip_max_books
                 end,
                 callback = function(touchmenu_instance)
                     choose_book(function(path)
@@ -443,6 +605,11 @@ function M.build(ctx)
                     save_dashboard("reinit")
                 end,
             },
+            interactive_item(mcfg),
+            {
+                text = _("Top status bar"),
+                sub_item_table = featured_status_bar_options(mcfg),
+            },
             {
                 text = _("Order"),
                 sub_item_table = build_order_items(mcfg),
@@ -456,6 +623,10 @@ function M.build(ctx)
                     mcfg.show_description = mcfg.show_description == false
                     save_dashboard("reinit")
                 end,
+            },
+            {
+                text = _("Progress labels"),
+                sub_item_table = build_progress_meta_items(mcfg),
             },
         }
     end
@@ -476,6 +647,7 @@ function M.build(ctx)
                     save_dashboard("reinit")
                 end,
             },
+            interactive_item(mcfg),
             {
                 text = _("Order"),
                 sub_item_table = build_order_items(mcfg),
@@ -522,11 +694,22 @@ function M.build(ctx)
                 checked_func = function()
                     return dcfg.rows.enabled[cid] == true
                 end,
+                enabled_func = function()
+                    return dcfg.rows.enabled[cid] == true
+                        or enabled_count(dcfg.rows.enabled) < dashboard_max_widgets
+                end,
                 callback = function()
                     if dcfg.rows.enabled[cid] == true then
                         if enabled_count(dcfg.rows.enabled) <= 1 then return end
                         dcfg.rows.enabled[cid] = false
                     else
+                        if enabled_count(dcfg.rows.enabled) >= dashboard_max_widgets then
+                            local InfoMessage = require("ui/widget/infomessage")
+                            UIManager:show(InfoMessage:new{
+                                text = _("Maximum 5 widgets allowed"),
+                            })
+                            return
+                        end
                         dcfg.rows.enabled[cid] = true
                     end
                     save_dashboard("reinit")
@@ -575,6 +758,7 @@ function M.build(ctx)
         local preset_name = preset and preset.name
         DashboardPresets.applyDashboardPagePreset(dcfg, preset)
         dcfg.active_preset = preset_name
+        PresetStore.setActivePreset("dashboard", preset_name)
         ensure_cfg(config)
         save_dashboard("reinit")
         if touchmenu_instance then touchmenu_instance:updateItems() end
@@ -612,6 +796,7 @@ function M.build(ctx)
                                 state.title = name
                                 PresetStore.save("dashboard", name, state)
                                 dcfg.active_preset = name
+                                PresetStore.setActivePreset("dashboard", name)
                                 save_dashboard("reinit")
                                 if touchmenu_instance then
                                     touchmenu_instance.item_table = build_preset_items()
@@ -647,6 +832,7 @@ function M.build(ctx)
                             PresetStore.delete("dashboard", preset_name)
                             if dcfg.active_preset == preset_name then
                                 dcfg.active_preset = nil
+                                PresetStore.setActivePreset("dashboard", nil)
                             end
                             save_dashboard("reinit")
                             if touchmenu_instance then
@@ -888,6 +1074,16 @@ function M.build(ctx)
             {
                 text = _("Settings"),
                 sub_item_table = {
+                    {
+                        text = _("Show top status bar"),
+                        checked_func = function()
+                            return dcfg.show_status_bar ~= false
+                        end,
+                        callback = function()
+                            dcfg.show_status_bar = dcfg.show_status_bar == false
+                            save_dashboard("reinit")
+                        end,
+                    },
                     {
                         text = _("Featured widgets"),
                         sub_item_table = {

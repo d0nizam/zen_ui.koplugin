@@ -15,6 +15,9 @@ msgstr "%1 min do konce kapitoly"
 msgid "%d%% Read"
 msgstr "%d%% přečteno"
 
+msgid "%s left"
+msgstr "zbývá %s"
+
 msgid "(auto)"
 msgstr "(auto)"
 
@@ -489,6 +492,9 @@ msgstr "Aktuální domovská složka:"
 msgid "Current only"
 msgstr "Pouze aktuální"
 
+msgid "Current/total pages"
+msgstr "Aktuální/celkové stránky"
+
 msgid "Custom"
 msgstr "Vlastní"
 
@@ -906,6 +912,9 @@ msgstr "Nainstalovaná verze je novější než poslední vydání."
 msgid "Installing"
 msgstr "Instalace"
 
+msgid "Interactive"
+msgstr "Interaktivní"
+
 msgid "items per page"
 msgstr "položek na stránku"
 
@@ -944,6 +953,9 @@ msgstr "poslední"
 
 msgid "Leave empty to use action title"
 msgstr "Pro použití názvu akce nechte prázdné"
+
+msgid "Left"
+msgstr "Vlevo"
 
 msgid "Left items"
 msgstr "Položky vlevo"
@@ -1230,6 +1242,9 @@ msgstr "Částečné obnovení stránek"
 msgid "Paste"
 msgstr "Vložit"
 
+msgid "Percent"
+msgstr "Procenta"
+
 msgid "percent - unopened - finished last"
 msgstr "procenta - neotevřené - dokončené poslední"
 
@@ -1274,6 +1289,9 @@ msgstr "Postup"
 
 msgid "Progress bar"
 msgstr "Ukazatel průběhu"
+
+msgid "Progress labels"
+msgstr "Popisky průběhu"
 
 msgid "Project: Title is not compatible with Zen UI."
 msgstr "Project: Title není kompatibilní s rozhraním Zen UI."
@@ -1421,6 +1439,9 @@ msgstr "Opačné řazení"
 
 msgid "Review"
 msgstr "Prohlédnout"
+
+msgid "Right"
+msgstr "Vpravo"
 
 msgid "Right items"
 msgstr "Položky vpravo"
@@ -1608,6 +1629,9 @@ msgstr "Zobrazit název pod obálkou (dlaždice)"
 msgid "Show top border"
 msgstr "Zobrazit horní rámeček"
 
+msgid "Show top status bar"
+msgstr "Zobrazit horní stavový řádek"
+
 msgid "Show warmth slider"
 msgstr "Zobrazit posuvník teploty"
 
@@ -1782,6 +1806,9 @@ msgstr "Čas"
 msgid "Time Format"
 msgstr "Formát času"
 
+msgid "Time to book end"
+msgstr "Čas do konce knihy"
+
 msgid "Title"
 msgstr "Název"
 
@@ -1808,6 +1835,9 @@ msgstr "Horní stavový řádek"
 
 msgid "total books"
 msgstr "celkem knih"
+
+msgid "Total pages"
+msgstr "Celkový počet stránek"
 
 msgid "total pages read"
 msgstr "celkem přečteno stránek"

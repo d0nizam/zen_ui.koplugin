@@ -147,7 +147,7 @@ function ZenUI:init()
 
     -- First-run: backup user's original screensaver settings as a preset.
     if not self.config._meta.screensaver_backup_created then
-        local PresetStore = require("common/preset_store")
+        local PresetStore = require("config/preset_store")
         local backup = {
             name = "backup",
             screensaver_type = G_reader_settings:readSetting("screensaver_type"),
@@ -159,6 +159,8 @@ function ZenUI:init()
             screensaver_stretch_limit_percentage = G_reader_settings:readSetting("screensaver_stretch_limit_percentage"),
         }
         PresetStore.save("screensaver", backup.name, backup)
+        PresetStore.saveSettings("screensaver", backup)
+        PresetStore.setActivePreset("screensaver", backup.name)
         self.config._meta.screensaver_backup_created = true
         self:saveConfig()
     end
@@ -277,7 +279,7 @@ function ZenUI:init()
             "is_update=", is_update,
             "channel=", update_channel)
         if shown_ver == false then
-            local ok_pages, pages_mod = pcall(require, "common/quickstart_pages")
+            local ok_pages, pages_mod = pcall(require, "common/quickstart/quickstart_pages")
             if ok_pages then
                 pages_to_show = pages_mod.build_install_pages({
                     plugin = self,
@@ -285,7 +287,7 @@ function ZenUI:init()
                 })
             end
         elseif is_update then
-            local ok_pages, pages_mod = pcall(require, "common/quickstart_pages")
+            local ok_pages, pages_mod = pcall(require, "common/quickstart/quickstart_pages")
             if ok_pages then
                 -- Strip beta suffix (e.g. "1.0.4-beta2" -> "1.0.4") for changelog lookup.
                 local stable_ver = current_ver:match("^([%d%.]+)")
@@ -301,7 +303,7 @@ function ZenUI:init()
             self:saveConfig()
 
             require("ui/uimanager"):scheduleIn(0.5, function()
-                local ok_qs, QuickstartScreen = pcall(require, "common/quickstart_screen")
+                local ok_qs, QuickstartScreen = pcall(require, "common/quickstart/quickstart_screen")
                 if not ok_qs then return end
                 require("ui/uimanager"):show(QuickstartScreen:new{
                     pages    = pages_to_show,
@@ -355,7 +357,7 @@ function ZenUI:init()
             logger.info("ZenUI update splash: scheduling for version", current_ver, "pages_to_show=", pages_to_show and #pages_to_show or 0)
             require("ui/uimanager"):scheduleIn(0.5, function()
                 logger.info("ZenUI update splash: timer fired, requiring zen_screen")
-                local ok_zs, ZenScreen = pcall(require, "common/zen_screen")
+                local ok_zs, ZenScreen = pcall(require, "common/ui/zen_screen")
                 if not ok_zs then
                     logger.warn("ZenUI update splash: failed to load zen_screen:", ZenScreen)
                     return
@@ -369,7 +371,7 @@ function ZenUI:init()
                     on_close  = function()
                         logger.info("ZenUI update splash: closed, pages_to_show=", pages_to_show and #pages_to_show or 0)
                         if pages_to_show and #pages_to_show > 0 then
-                            local ok_qs, QuickstartScreen = pcall(require, "common/quickstart_screen")
+                            local ok_qs, QuickstartScreen = pcall(require, "common/quickstart/quickstart_screen")
                             if not ok_qs then
                                 logger.warn("ZenUI update splash: failed to load quickstart_screen:", QuickstartScreen)
                                 return
@@ -561,7 +563,7 @@ function ZenUI:deletePluginSettings()
 
     -- Delete the dedicated settings folder.
     pcall(function()
-        require("common/preset_store").removeAll()
+        require("config/preset_store").removeAll()
     end)
 
     -- Also clean up any legacy G_reader_settings key left from before the
