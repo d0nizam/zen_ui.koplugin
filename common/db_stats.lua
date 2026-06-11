@@ -143,7 +143,7 @@ local function field_set(fields)
     return set
 end
 
-function StatsDB.queryDashboardStats(fields)
+function StatsDB.queryHomeStats(fields)
     local stats = {
         today_pages = 0,
         today_duration = 0,
@@ -179,7 +179,7 @@ function StatsDB.queryDashboardStats(fields)
         end
     end)
     if not ok then
-        logger.warn("zen-ui db_stats: dashboard query failed:", query_err)
+        logger.warn("zen-ui db_stats: home query failed:", query_err)
     end
 
     conn:close()

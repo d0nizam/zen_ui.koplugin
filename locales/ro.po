@@ -546,10 +546,10 @@ msgstr "Obiectiv zilnic de timp (min)"
 msgid "Daily time goal (min): "
 msgstr "Obiectiv zilnic de timp (min): "
 
-msgid "Dashboard"
+msgid "Home page"
 msgstr "Panou"
 
-msgid "Dashboard preset"
+msgid "Home page preset"
 msgstr "Presetare panou"
 
 msgid "date modified"
@@ -1278,6 +1278,9 @@ msgstr "Nume setare predefinită"
 msgid "Presets"
 msgstr "Setări predefinite"
 
+msgid "Zen Presets"
+msgstr "Zen Presets"
+
 msgid "Prev"
 msgstr "Anterior"
 
@@ -1464,7 +1467,7 @@ msgstr "Pluginul RSS Reader nu este instalat."
 msgid "Save"
 msgstr "Salvează"
 
-msgid "Save current dashboard as preset"
+msgid "Save current home page as preset"
 msgstr "Salvează panoul curent ca presetare"
 
 msgid "Save current settings as preset"

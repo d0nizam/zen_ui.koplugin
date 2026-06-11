@@ -954,11 +954,11 @@ local function apply_status_bar()
     -- pausing the shared heartbeat during suspend.
     local _fm_autoRefresh = nil
 
-    local function is_dashboard_without_status_on_top()
+    local function is_home_without_status_on_top()
         local stack = UIManager._window_stack
         local top = stack and stack[#stack]
         local top_widget = top and top.widget
-        return top_widget and top_widget._zen_dashboard_show_status_bar == false
+        return top_widget and top_widget._zen_home_show_status_bar == false
     end
 
     local function refreshVisibleStatusBar(fm, clock_tick)
@@ -970,7 +970,7 @@ local function apply_status_bar()
         if top_widget == fm or top_widget == fm.show_parent then
             fm:_updateStatusBar()
         elseif top_widget and top_widget._zen_status_refresh then
-            if top_widget._zen_dashboard_show_status_bar == false then return end
+            if top_widget._zen_home_show_status_bar == false then return end
             if clock_tick and top_widget._zen_status_clock_bound then return end
             top_widget._zen_status_refresh(top_widget)
         end
@@ -1047,7 +1047,7 @@ local function apply_status_bar()
         end)
 
         -- Periodic refresh for time/battery/disk. The shared heartbeat is
-        -- minute-aligned and also drives dashboard/group standalone pages.
+        -- minute-aligned and also drives home/group standalone pages.
         local function autoRefresh()
             refreshVisibleStatusBar(fm, true)
         end
@@ -1152,7 +1152,7 @@ local function apply_status_bar()
             local fm = FileManager.instance
             if fm and is_enabled() then
                 UIManager:nextTick(function()
-                    if FileManager.instance == fm and not is_dashboard_without_status_on_top() then
+                    if FileManager.instance == fm and not is_home_without_status_on_top() then
                         fm:_updateStatusBar()
                     end
                 end)

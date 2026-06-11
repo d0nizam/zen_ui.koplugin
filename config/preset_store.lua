@@ -6,7 +6,8 @@ local M = {}
 
 local ROOT_DIR = DataStorage:getSettingsDir() .. "/Zen UI"
 local VALID_KINDS = {
-    dashboard = true,
+    home = true,
+    reader = true,
     screensaver = true,
 }
 
@@ -111,7 +112,7 @@ end
 
 function M.migrateStores(initial_settings)
     local changed = false
-    for _i, kind in ipairs({ "dashboard", "screensaver" }) do
+    for _i, kind in ipairs({ "home", "reader", "screensaver" }) do
         local init = type(initial_settings) == "table" and initial_settings[kind] or nil
         if M.ensureStore(kind, init) then
             changed = true

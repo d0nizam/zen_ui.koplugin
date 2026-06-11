@@ -60,7 +60,7 @@ end
 function M.resolveLocalIcon(icons_dir, name)
     if not icons_dir or not name then return nil end
     local lfs = require("libs/libkoreader-lfs")
-    for _, ext in ipairs({ ".svg", ".png" }) do
+    for _i, ext in ipairs({ ".svg", ".png" }) do
         local p = icons_dir .. name .. ext
         if lfs.attributes(p, "mode") == "file" then return p end
     end
@@ -160,7 +160,7 @@ function M.registerPluginIcons(icons_dir, icons, copy_to_user_dir)
                 local DataStorage = require("datastorage")
                 local user_dir = DataStorage:getDataDir() .. "/icons"
                 local found = false
-                for _, d in ipairs(icons_dirs) do
+                for _i, d in ipairs(icons_dirs) do
                     if d == user_dir then found = true; break end
                 end
                 if not found then table.insert(icons_dirs, 1, user_dir) end
@@ -258,32 +258,42 @@ function M.getBadgeScale(config)
     return 1.0
 end
 
+local function get_badge_rgb(config)
+    local c = type(config) == "table"
+        and type(config.browser_cover_badges) == "table"
+        and config.browser_cover_badges.badge_color
+    if type(c) == "table" then
+        local r = math.max(0, math.min(255, tonumber(c[1] or c.r) or 0))
+        local g = math.max(0, math.min(255, tonumber(c[2] or c.g) or 0))
+        local b = math.max(0, math.min(255, tonumber(c[3] or c.b) or 0))
+        return r, g, b
+    end
+end
+
 --- Returns the configured badge background color, or COLOR_LIGHT_GRAY if not set.
 --- @param config table|nil  the plugin config table (p.config)
 --- @return userdata  Blitbuffer color
 function M.getBadgeColor(config)
     local Blitbuffer = require("ffi/blitbuffer")
-    local c = type(config) == "table"
-        and type(config.browser_cover_badges) == "table"
-        and config.browser_cover_badges.badge_color
-    if type(c) == "table" then
-        local r = math.max(0, math.min(255, tonumber(c[1]) or 0))
-        local g = math.max(0, math.min(255, tonumber(c[2]) or 0))
-        local b = math.max(0, math.min(255, tonumber(c[3]) or 0))
+    local r, g, b = get_badge_rgb(config)
+    if r then
         return Blitbuffer.ColorRGB32(r, g, b, 255)
     end
     return Blitbuffer.COLOR_BLACK
+end
+
+--- True when badge fill should use white contrast text/outline.
+--- Mirrors the file-browser badge patches: default/black is dark; custom colors use black.
+function M.isBadgeDark(config)
+    local r, g, b = get_badge_rgb(config)
+    return r == nil or (r == 0 and g == 0 and b == 0)
 end
 
 --- Returns the foreground color for text/icons drawn inside a badge.
 --- White when the badge fill is black (0,0,0), black otherwise.
 function M.getBadgeTextColor(config)
     local Blitbuffer = require("ffi/blitbuffer")
-    local c = type(config) == "table"
-        and type(config.browser_cover_badges) == "table"
-        and config.browser_cover_badges.badge_color
-    -- nil means default (black), so text is white; explicit non-black gets black text.
-    if c == nil or (type(c) == "table" and c[1] == 0 and c[2] == 0 and c[3] == 0) then
+    if M.isBadgeDark(config) then
         return Blitbuffer.COLOR_WHITE
     end
     return Blitbuffer.COLOR_BLACK
@@ -339,7 +349,7 @@ function M.closeWidgetsAbove(anchor_widget)
         if not entry or entry.widget == anchor_widget then break end
         table.insert(to_close, entry.widget)
     end
-    for _, w in ipairs(to_close) do UIManager:close(w) end
+    for _i, w in ipairs(to_close) do UIManager:close(w) end
 end
 
 return M

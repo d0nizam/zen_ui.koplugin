@@ -546,10 +546,10 @@ msgstr "Mục tiêu thời gian hằng ngày (phút)"
 msgid "Daily time goal (min): "
 msgstr "Mục tiêu thời gian hằng ngày (phút): "
 
-msgid "Dashboard"
+msgid "Home page"
 msgstr "Bảng điều khiển"
 
-msgid "Dashboard preset"
+msgid "Home page preset"
 msgstr "Mẫu bảng điều khiển"
 
 msgid "date modified"
@@ -1278,6 +1278,9 @@ msgstr "Tên cài đặt trước"
 msgid "Presets"
 msgstr "Cài đặt trước"
 
+msgid "Zen Presets"
+msgstr "Zen Presets"
+
 msgid "Prev"
 msgstr "Trước"
 
@@ -1464,7 +1467,7 @@ msgstr "Plugin Trình đọc RSS chưa được cài đặt."
 msgid "Save"
 msgstr "Lưu"
 
-msgid "Save current dashboard as preset"
+msgid "Save current home page as preset"
 msgstr "Lưu bảng điều khiển hiện tại làm mẫu"
 
 msgid "Save current settings as preset"

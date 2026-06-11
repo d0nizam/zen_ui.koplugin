@@ -6,6 +6,7 @@ local updater        = require("modules/settings/zen_updater")
 local utils          = require("modules/settings/zen_settings_utils")
 
 local lib_section      = require("modules/settings/sections/library_settings")
+local home_section = require("modules/settings/sections/library_settings/home_settings")
 local navbar_section   = require("modules/settings/sections/library_settings/navbar_settings")
 local menu_section     = require("modules/settings/sections/menu_settings")
 local reader_section   = require("modules/settings/sections/reader_settings")
@@ -40,6 +41,7 @@ function M.build(plugin)
     }
 
     local filebrowser_items    = lib_section.build(ctx)
+    local home_item       = home_section.build(ctx)
     local navbar_item          = navbar_section.build(ctx)
     local quick_settings_item  = menu_section.build(ctx)
     local reader_items         = reader_section.build(ctx)
@@ -110,6 +112,8 @@ function M.build(plugin)
     -- Root menu assembly
     -- -------------------------------------------------------------------------
 
+    home_item.text = _("Home page")
+
     local root_items = {
         {
             text = _("Zen Mode"),
@@ -123,6 +127,7 @@ function M.build(plugin)
         },
         quick_settings_item,
         { text = _("Library"),  sub_item_table = filebrowser_items },
+        home_item,
         navbar_item,
         { text = _("Reader"),   sub_item_table = reader_items      },
         { text = _("Global"),   sub_item_table = global_items      },

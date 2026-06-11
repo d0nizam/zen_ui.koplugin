@@ -2,16 +2,16 @@ local logger = require("logger")
 local ConfigManager = require("config/manager")
 local book_status = require("common/book_status")
 local Blitbuffer = require("ffi/blitbuffer")
-local DashboardQuotes = require("modules/filebrowser/patches/dashboard/dashboard_quotes")
-local DashboardPresets = require("modules/filebrowser/patches/dashboard/dashboard_presets")
+local HomeQuotes = require("modules/filebrowser/patches/home/home_quotes")
+local HomePresets = require("modules/filebrowser/patches/home/home_presets")
 local PresetStore = require("config/preset_store")
-local Registry = require("modules/filebrowser/patches/dashboard/components/registry")
+local Registry = require("modules/filebrowser/patches/home/components/registry")
 local StandalonePage = require("modules/filebrowser/patches/standalone_page")
 
 local M = {}
 
-local _dashboard_menu = nil
-local _dashboard_inject_navbar = nil
+local _home_menu = nil
+local _home_inject_navbar = nil
 local _zen_shared = nil
 local _zen_plugin = nil
 
@@ -127,7 +127,7 @@ local function ensure_strip_module_cfg(dcfg, module_id)
     return mcfg
 end
 
-local function ensure_dashboard_widget_cfg(dcfg)
+local function ensure_home_widget_cfg(dcfg)
     local featured_custom = ensure_featured_module_cfg(dcfg, "featured_custom")
     if type(featured_custom.path) ~= "string" then featured_custom.path = nil end
     ensure_featured_module_cfg(dcfg, "featured_tbr")
@@ -152,12 +152,12 @@ local function load_zen_config()
     end
 end
 
-local function ensure_dashboard_cfg()
-    local dcfg = PresetStore.getSettings("dashboard")
+local function ensure_home_cfg()
+    local dcfg = PresetStore.getSettings("home")
     if type(dcfg) ~= "table" or next(dcfg) == nil then
-        dcfg = DashboardPresets.defaultDashboardPage()
+        dcfg = HomePresets.defaultHomePage()
     end
-    DashboardPresets.ensurePresetState(dcfg)
+    HomePresets.ensurePresetState(dcfg)
 
     if type(dcfg.rows) ~= "table" then dcfg.rows = {} end
     local rows = dcfg.rows
@@ -222,13 +222,42 @@ local function ensure_dashboard_cfg()
 
     if type(dcfg.quotes.manual_index) ~= "number" then dcfg.quotes.manual_index = 1 end
 
-    -- Per-widget dashboard settings.
+    -- Per-widget home settings.
     for _i, comp in ipairs(Registry.list()) do
         ensure_module_cfg(dcfg, comp.id)
     end
-    ensure_dashboard_widget_cfg(dcfg)
+    ensure_home_widget_cfg(dcfg)
 
     return dcfg
+end
+
+local function unique_user_preset_name(base)
+    if not PresetStore.find("home", base) then return base end
+    local i = 2
+    while PresetStore.find("home", base .. " " .. i) do
+        i = i + 1
+    end
+    return base .. " " .. i
+end
+
+local function editable_name_for_builtin(preset_name)
+    if preset_name == HomePresets.DEFAULT_PRESET_NAME then
+        return HomePresets.CUSTOM_PRESET_NAME
+    end
+    return tostring(preset_name or HomePresets.CUSTOM_PRESET_NAME) .. " custom"
+end
+
+local function save_home_settings(dcfg)
+    if type(dcfg) == "table" and HomePresets.isBuiltinPresetName(dcfg.active_preset) then
+        local name = unique_user_preset_name(editable_name_for_builtin(dcfg.active_preset))
+        dcfg.active_preset = name
+        dcfg.title = name
+        local state = HomePresets.captureHomePage(dcfg)
+        state.title = name
+        PresetStore.save("home", name, state)
+        PresetStore.setActivePreset("home", name)
+    end
+    PresetStore.saveSettings("home", dcfg)
 end
 
 local function resolve_rows(dcfg)
@@ -296,7 +325,7 @@ local function get_quote_day_index()
 end
 
 local function get_daily_quote_index()
-    local quotes = DashboardQuotes.getQuotes()
+    local quotes = HomeQuotes.getQuotes()
     if #quotes == 0 then return 1 end
     return (get_quote_day_index() % #quotes) + 1
 end
@@ -406,8 +435,8 @@ local function build_data_provider(cfg, dcfg)
     local function get_stats(fields)
         if stats_cached then return stats_cached end
         local ok_stats, StatsDB = pcall(require, "common/db_stats")
-        if ok_stats and StatsDB and type(StatsDB.queryDashboardStats) == "function" then
-            stats_cached = StatsDB.queryDashboardStats(fields) or {}
+        if ok_stats and StatsDB and type(StatsDB.queryHomeStats) == "function" then
+            stats_cached = StatsDB.queryHomeStats(fields) or {}
         elseif ok_stats and StatsDB and type(StatsDB.queryStats) == "function" then
             stats_cached = StatsDB.queryStats() or {}
         else
@@ -752,14 +781,14 @@ local function build_data_provider(cfg, dcfg)
         local cur = tonumber(strip_offsets[offset_key]) or 0
         local step = direction == "previous" and -n or n
         strip_offsets[offset_key] = (cur + step) % #paths
-        if _dashboard_menu and _dashboard_menu._dashboard_rebuild then
-            _dashboard_menu:_dashboard_rebuild()
+        if _home_menu and _home_menu._home_rebuild then
+            _home_menu:_home_rebuild()
         end
         return true
     end
 
     function provider:getCurrentQuote()
-        local quotes = DashboardQuotes.getQuotes()
+        local quotes = HomeQuotes.getQuotes()
         local quote_count = #quotes
         if quote_count == 0 then return nil end
         local idx
@@ -775,7 +804,7 @@ local function build_data_provider(cfg, dcfg)
     end
 
     function provider:nextQuote()
-        local quotes = DashboardQuotes.getQuotes()
+        local quotes = HomeQuotes.getQuotes()
         local quote_count = #quotes
         if quote_count == 0 then return end
         local quote_cfg = dcfg.quotes or {}
@@ -786,9 +815,9 @@ local function build_data_provider(cfg, dcfg)
         if quote_cfg.manual_index > quote_count then quote_cfg.manual_index = 1 end
         quote_cfg.day_seed = get_quote_day_index()
         dcfg.quotes = quote_cfg
-        PresetStore.saveSettings("dashboard", dcfg)
-        if _dashboard_menu and _dashboard_menu._dashboard_rebuild then
-            _dashboard_menu:_dashboard_rebuild()
+        save_home_settings(dcfg)
+        if _home_menu and _home_menu._home_rebuild then
+            _home_menu:_home_rebuild()
         end
     end
 
@@ -987,7 +1016,7 @@ local function grow_row_heights_by_priority(row_heights, extra_px)
     return grown
 end
 
-local function build_dashboard_content(menu, dcfg, rows, data_provider)
+local function build_home_content(menu, dcfg, rows, data_provider)
     local Device = require("device")
     local Screen = Device.screen
     local Geom = require("ui/geometry")
@@ -1074,7 +1103,7 @@ local function build_dashboard_content(menu, dcfg, rows, data_provider)
         fc:showFileDialog({
             path = path,
             is_file = true,
-            _zen_dashboard_context = true,
+            _zen_home_context = true,
             _zen_disable_select = true,
         })
         return true
@@ -1176,7 +1205,7 @@ local function build_dashboard_content(menu, dcfg, rows, data_provider)
             })
             used_h = used_h + h
         else
-            logger.warn("zen-ui dashboard: failed to build component:", comp.id, widget)
+            logger.warn("zen-ui home: failed to build component:", comp.id, widget)
         end
         if row_gap > 0 and i < #rows then
             table.insert(children, VerticalSpan:new{ width = row_gap })
@@ -1217,17 +1246,17 @@ local function rows_need_clock_rebuild(rows, dcfg)
     return false
 end
 
-function M.showDashboardView(injectNavbar)
+function M.showHomeView(injectNavbar)
     local UIManager = require("ui/uimanager")
 
-    _dashboard_inject_navbar = injectNavbar
+    _home_inject_navbar = injectNavbar
     local cfg = load_zen_config()
     if type(cfg) ~= "table" then return end
-    local dcfg = ensure_dashboard_cfg()
+    local dcfg = ensure_home_cfg()
     local show_status_bar = dcfg.show_status_bar ~= false
 
     local menu = StandalonePage.create_menu{
-        name = "dashboard",
+        name = "home",
         title = " ",
         no_title = not show_status_bar,
     }
@@ -1243,12 +1272,12 @@ function M.showDashboardView(injectNavbar)
             repaintTitleBar = repaintTitleBar,
         })
     end
-    menu._zen_dashboard_show_status_bar = show_status_bar
+    menu._zen_home_show_status_bar = show_status_bar
 
     local rows = resolve_rows(dcfg)
     local data_provider = build_data_provider(cfg, dcfg)
     local needs_clock_rebuild = rows_need_clock_rebuild(rows, dcfg)
-    menu._zen_dashboard_needs_clock_rebuild = needs_clock_rebuild
+    menu._zen_home_needs_clock_rebuild = needs_clock_rebuild
 
     local function rebuild(refresh_stats)
         if data_provider then
@@ -1258,7 +1287,7 @@ function M.showDashboardView(injectNavbar)
                 data_provider:refreshStats(rows)
             end
         end
-        local content = build_dashboard_content(menu, dcfg, rows, data_provider)
+        local content = build_home_content(menu, dcfg, rows, data_provider)
         StandalonePage.mount_body(menu, content)
         UIManager:setDirty(menu, "ui")
     end
@@ -1270,8 +1299,8 @@ function M.showDashboardView(injectNavbar)
             if status_refresh then
                 status_refresh(target, ...)
             end
-            if needs_clock_rebuild and target and target._dashboard_rebuild then
-                target:_dashboard_rebuild()
+            if needs_clock_rebuild and target and target._home_rebuild then
+                target:_home_rebuild()
             end
         end
     else
@@ -1280,37 +1309,37 @@ function M.showDashboardView(injectNavbar)
     if not show_status_bar and needs_clock_rebuild then
         pcall(function()
             require("common/clock_timer").bind(menu, function(target)
-                if target and target._dashboard_rebuild then
-                    target:_dashboard_rebuild()
+                if target and target._home_rebuild then
+                    target:_home_rebuild()
                 end
             end)
         end)
     end
 
-    function menu:_dashboard_rebuild(refresh_stats, reload_config)
+    function menu:_home_rebuild(refresh_stats, reload_config)
         if reload_config == true then
             local next_cfg = load_zen_config()
             if type(next_cfg) == "table" then
                 cfg = next_cfg
-                dcfg = ensure_dashboard_cfg()
+                dcfg = ensure_home_cfg()
                 data_provider = build_data_provider(cfg, dcfg)
             end
         end
         rows = resolve_rows(dcfg)
         needs_clock_rebuild = rows_need_clock_rebuild(rows, dcfg)
-        self._zen_dashboard_needs_clock_rebuild = needs_clock_rebuild
+        self._zen_home_needs_clock_rebuild = needs_clock_rebuild
         rebuild(refresh_stats == true)
     end
 
     menu.close_callback = function()
         UIManager:close(menu)
-        _dashboard_menu = nil
+        _home_menu = nil
     end
 
     local orig_onCloseWidget = menu.onCloseWidget
     function menu:onCloseWidget(...)
-        if rawequal(_dashboard_menu, self) then
-            _dashboard_menu = nil
+        if rawequal(_home_menu, self) then
+            _home_menu = nil
         end
         pcall(function()
             require("common/clock_timer").unbind(self)
@@ -1320,10 +1349,10 @@ function M.showDashboardView(injectNavbar)
         end
     end
 
-    _dashboard_menu = menu
+    _home_menu = menu
 
     if injectNavbar then
-        injectNavbar(menu, "dashboard")
+        injectNavbar(menu, "home")
     end
 
     UIManager:show(menu)
@@ -1336,49 +1365,49 @@ function M.showDashboardView(injectNavbar)
 end
 
 function M.getActivePage()
-    return _dashboard_menu and (_dashboard_menu.page or 1)
+    return _home_menu and (_home_menu.page or 1)
 end
 
 function M.rebuildActive()
-    if _dashboard_menu and _dashboard_menu._dashboard_rebuild then
+    if _home_menu and _home_menu._home_rebuild then
         local cfg = load_zen_config()
-        local dcfg = type(cfg) == "table" and ensure_dashboard_cfg() or nil
+        local dcfg = type(cfg) == "table" and ensure_home_cfg() or nil
         local show_status_bar = not dcfg or dcfg.show_status_bar ~= false
         local needs_clock_rebuild = false
         if dcfg then
             needs_clock_rebuild = rows_need_clock_rebuild(resolve_rows(dcfg), dcfg)
         end
-        if _dashboard_menu._zen_dashboard_show_status_bar ~= show_status_bar
-                or _dashboard_menu._zen_dashboard_needs_clock_rebuild ~= needs_clock_rebuild then
+        if _home_menu._zen_home_show_status_bar ~= show_status_bar
+                or _home_menu._zen_home_needs_clock_rebuild ~= needs_clock_rebuild then
             local UIManager = require("ui/uimanager")
-            UIManager:close(_dashboard_menu)
-            _dashboard_menu = nil
-            M.showDashboardView(_dashboard_inject_navbar)
+            UIManager:close(_home_menu)
+            _home_menu = nil
+            M.showHomeView(_home_inject_navbar)
             return true
         end
-        _dashboard_menu:_dashboard_rebuild(true, true)
+        _home_menu:_home_rebuild(true, true)
         return true
     end
     return false
 end
 
 function M.hasActive()
-    return _dashboard_menu ~= nil
+    return _home_menu ~= nil
 end
 
 function M.isActiveOnTop()
-    if not _dashboard_menu then return false end
+    if not _home_menu then return false end
     local UIManager = require("ui/uimanager")
     local stack = UIManager._window_stack
     local top = stack and stack[#stack]
-    return top and top.widget == _dashboard_menu
+    return top and top.widget == _home_menu
 end
 
 function M.closeAll()
-    if _dashboard_menu then
+    if _home_menu then
         local UIManager = require("ui/uimanager")
-        UIManager:close(_dashboard_menu)
-        _dashboard_menu = nil
+        UIManager:close(_home_menu)
+        _home_menu = nil
     end
 end
 
@@ -1388,5 +1417,5 @@ return function()
     if not zen_plugin._zen_shared then zen_plugin._zen_shared = {} end
     _zen_shared = zen_plugin._zen_shared
     _zen_plugin = zen_plugin
-    zen_plugin._zen_shared.dashboard = M
+    zen_plugin._zen_shared.home = M
 end

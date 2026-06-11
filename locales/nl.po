@@ -546,11 +546,11 @@ msgstr "Dagdoel tijd (min)"
 msgid "Daily time goal (min): "
 msgstr "Dagdoel tijd (min): "
 
-msgid "Dashboard"
-msgstr "Dashboard"
+msgid "Home page"
+msgstr "Home"
 
-msgid "Dashboard preset"
-msgstr "Dashboardvoorinstelling"
+msgid "Home page preset"
+msgstr "Homevoorinstelling"
 
 msgid "date modified"
 msgstr "datum gewijzigd"
@@ -1278,6 +1278,9 @@ msgstr "Naam voorinstelling"
 msgid "Presets"
 msgstr "Voorinstellingen"
 
+msgid "Zen Presets"
+msgstr "Zen Presets"
+
 msgid "Prev"
 msgstr "Vorige"
 
@@ -1464,8 +1467,8 @@ msgstr "De RSS Reader-plugin is niet geïnstalleerd."
 msgid "Save"
 msgstr "Opslaan"
 
-msgid "Save current dashboard as preset"
-msgstr "Huidig dashboard opslaan als voorinstelling"
+msgid "Save current home page as preset"
+msgstr "Huidig home opslaan als voorinstelling"
 
 msgid "Save current settings as preset"
 msgstr "Huidige instellingen opslaan als voorinstelling"

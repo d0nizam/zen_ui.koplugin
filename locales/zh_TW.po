@@ -546,10 +546,10 @@ msgstr "每日時間目標（分鐘）"
 msgid "Daily time goal (min): "
 msgstr "每日時間目標（分鐘）： "
 
-msgid "Dashboard"
+msgid "Home page"
 msgstr "儀表板"
 
-msgid "Dashboard preset"
+msgid "Home page preset"
 msgstr "儀表板預設"
 
 msgid "date modified"
@@ -1278,6 +1278,9 @@ msgstr "預設名稱"
 msgid "Presets"
 msgstr "預設"
 
+msgid "Zen Presets"
+msgstr "Zen Presets"
+
 msgid "Prev"
 msgstr "上一個"
 
@@ -1464,7 +1467,7 @@ msgstr "RSS Reader外掛程式未安裝。"
 msgid "Save"
 msgstr "儲存"
 
-msgid "Save current dashboard as preset"
+msgid "Save current home page as preset"
 msgstr "將目前儀表板儲存為預設"
 
 msgid "Save current settings as preset"

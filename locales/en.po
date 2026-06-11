@@ -546,11 +546,11 @@ msgstr "Daily time goal (min)"
 msgid "Daily time goal (min): "
 msgstr "Daily time goal (min): "
 
-msgid "Dashboard"
-msgstr "Dashboard"
+msgid "Home page"
+msgstr "Home page"
 
-msgid "Dashboard preset"
-msgstr "Dashboard preset"
+msgid "Home page preset"
+msgstr "Home page preset"
 
 msgid "date modified"
 msgstr "date modified"
@@ -1278,6 +1278,9 @@ msgstr "Preset name"
 msgid "Presets"
 msgstr "Presets"
 
+msgid "Zen Presets"
+msgstr "Zen Presets"
+
 msgid "Prev"
 msgstr "Prev"
 
@@ -1464,8 +1467,8 @@ msgstr "RSS Reader plugin is not installed."
 msgid "Save"
 msgstr "Save"
 
-msgid "Save current dashboard as preset"
-msgstr "Save current dashboard as preset"
+msgid "Save current home page as preset"
+msgstr "Save current home page as preset"
 
 msgid "Save current settings as preset"
 msgstr "Save current settings as preset"

@@ -62,7 +62,7 @@ local function apply_navbar()
             series = false,
             tags = false,
             to_be_read = false,
-            dashboard = false,
+            home = true,
             search = false,
             calibre_search = false,
             stats = false,
@@ -71,11 +71,11 @@ local function apply_navbar()
             page_right = false,
             menu = false,
         },
-        tab_order = { "page_left", "books", "manga", "news", "continue", "authors", "series", "tags", "to_be_read", "dashboard", "history", "favorites", "collections", "stats", "search", "calibre_search", "exit", "page_right", "menu" },
+        tab_order = { "page_left", "books", "manga", "news", "continue", "authors", "series", "tags", "to_be_read", "home", "history", "favorites", "collections", "stats", "search", "calibre_search", "exit", "page_right", "menu" },
         show_icons = true,
         show_labels = true,
         books_label = "",  -- empty = auto-translated "Library"
-        dashboard_label = "Home",
+        home_label = "Home",
         default_tab = "books",
         manga_action = "rakuyomi",
         manga_folder = "",
@@ -142,8 +142,8 @@ local function apply_navbar()
         return config.books_label ~= "" and config.books_label or _("Library")
     end
 
-    local function getDashboardLabel()
-        return config.dashboard_label ~= "" and config.dashboard_label or _("Home")
+    local function getHomeLabel()
+        return config.home_label ~= "" and config.home_label or _("Home")
     end
 
     local tabs = {
@@ -203,8 +203,8 @@ local function apply_navbar()
             icon = "tab_to_be_read",
         },
         {
-            id = "dashboard",
-            label = getDashboardLabel(),
+            id = "home",
+            label = getHomeLabel(),
             icon = "home",
         },
         {
@@ -407,9 +407,9 @@ local function apply_navbar()
         if GroupView then GroupView.showTagsView(injectStandaloneNavbar) end
     end
 
-    local function onTabDashboard()
-        local Dashboard = zen_plugin._zen_shared and zen_plugin._zen_shared.dashboard
-        if Dashboard then Dashboard.showDashboardView(injectStandaloneNavbar) end
+    local function onTabHome()
+        local Home = zen_plugin._zen_shared and zen_plugin._zen_shared.home
+        if Home then Home.showHomeView(injectStandaloneNavbar) end
     end
 
     local function onTabSearch()
@@ -496,7 +496,7 @@ local function apply_navbar()
         series = onTabSeries,
         tags = onTabTags,
         to_be_read = onTabTBR,
-        dashboard = onTabDashboard,
+        home = onTabHome,
         search = onTabSearch,
         calibre_search = onTabCalibreSearch,
         stats = onTabStats,
@@ -517,7 +517,7 @@ local function apply_navbar()
         series = true,
         tags = true,
         to_be_read = true,
-        dashboard = true,
+        home = true,
     }
 
     local function is_tab_enabled(tab_id)
@@ -836,7 +836,7 @@ local function apply_navbar()
 
         -- Update books tab label from config
         tabs_by_id["books"].label = getBooksLabel()
-        tabs_by_id["dashboard"].label = getDashboardLabel()
+        tabs_by_id["home"].label = getHomeLabel()
 
         -- Sync custom tabs from config so add/remove/edit takes effect on every reinject
         local known_custom = {}
@@ -977,7 +977,7 @@ local function apply_navbar()
                 or tapped_id == "news"      or tapped_id == "authors"
                 or tapped_id == "series"    or tapped_id == "tags"
                 or tapped_id == "to_be_read"
-                or tapped_id == "dashboard"
+                or tapped_id == "home"
                 or tapped_id == "history"   or tapped_id == "favorites"
                 or tapped_id == "collections"
                 or tapped_id:sub(1, 3) == "ct_"
@@ -1029,7 +1029,7 @@ local function apply_navbar()
         series = true,
         tags = true,
         to_be_read = true,
-        dashboard = true,
+        home = true,
         authors_detail = true,
         series_detail = true,
         tags_detail = true,
@@ -1243,7 +1243,7 @@ local function apply_navbar()
                 or tid == "news"    or tid == "authors"
                 or tid == "series"  or tid == "tags"
                 or tid == "to_be_read"
-                or tid == "dashboard"
+                or tid == "home"
                 or tid == "history" or tid == "favorites"
                 or tid == "collections"
             if track and tid ~= active_tab then
@@ -1598,11 +1598,11 @@ local function apply_navbar()
             if not new_nb then return end
             local new_h = new_nb:getSize().h
             local old_h = menu._zen_navbar_height or new_h
-            if new_h ~= old_h and menu.name == "dashboard" then
-                local Dashboard = zen_plugin._zen_shared and zen_plugin._zen_shared.dashboard
-                if Dashboard and Dashboard.showDashboardView then
+            if new_h ~= old_h and menu.name == "home" then
+                local Home = zen_plugin._zen_shared and zen_plugin._zen_shared.home
+                if Home and Home.showHomeView then
                     UIManager:close(menu)
-                    Dashboard.showDashboardView(injectStandaloneNavbar)
+                    Home.showHomeView(injectStandaloneNavbar)
                     return
                 end
             end
@@ -1795,9 +1795,9 @@ local function apply_navbar()
             if gv and gv.getActivePage then
                 page = gv.getActivePage(active_tab) or 1
             end
-            local dash = zen_plugin._zen_shared and zen_plugin._zen_shared.dashboard
-            if dash and active_tab == "dashboard" and dash.getActivePage then
-                page = dash.getActivePage() or 1
+            local home = zen_plugin._zen_shared and zen_plugin._zen_shared.home
+            if home and active_tab == "home" and home.getActivePage then
+                page = home.getActivePage() or 1
             end
             -- Standalone views: history / favorites / collections
             local fm = FileManager.instance
@@ -1828,8 +1828,8 @@ local function apply_navbar()
         end
         -- Close orphaned overlay menus to keep UIManager's stack clean
         if gv and gv.closeAll then gv.closeAll() end
-        local dash = zen_plugin._zen_shared and zen_plugin._zen_shared.dashboard
-        if dash and dash.closeAll then dash.closeAll() end
+        local home = zen_plugin._zen_shared and zen_plugin._zen_shared.home
+        if home and home.closeAll then home.closeAll() end
         local fm = FileManager.instance
         if fm then
             if fm.history and fm.history.booklist_menu then

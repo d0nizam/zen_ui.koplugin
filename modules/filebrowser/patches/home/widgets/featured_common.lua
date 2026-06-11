@@ -15,7 +15,7 @@ local Device = require("device")
 local Font = require("ui/font")
 local util = require("util")
 local zen_utils = require("common/utils")
-local cover_common = require("modules/filebrowser/patches/dashboard/widgets/cover_common")
+local cover_common = require("modules/filebrowser/patches/home/widgets/cover_common")
 local logger = require("logger")
 local _ = require("gettext")
 

@@ -24,7 +24,7 @@ end
 
 local function refresh_bound_status_row(target)
     if not target or not target._zen_status_refresh then return end
-    if target._zen_dashboard_show_status_bar == false then return end
+    if target._zen_home_show_status_bar == false then return end
     local UIManager = require("ui/uimanager")
     local stack = UIManager._window_stack
     local top = stack and stack[#stack]

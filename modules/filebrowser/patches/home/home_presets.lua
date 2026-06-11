@@ -1,8 +1,9 @@
 local M = {}
 
-M.DEFAULT_PRESET_NAME = "(Zen UI) Default"
+M.DEFAULT_PRESET_NAME = "Zen Default"
+M.CUSTOM_PRESET_NAME = "Custom preset"
 
-local DEFAULT_DASHBOARD_PAGE = {
+local DEFAULT_HOME_PAGE = {
     title = M.DEFAULT_PRESET_NAME,
     rows = {
         max_rows = 5,
@@ -131,7 +132,141 @@ local DEFAULT_DASHBOARD_PAGE = {
     },
 }
 
-local DASHBOARD_KEYS = {
+local BOOKSHELF_HOME_PAGE = {
+    title = "Bookshelf",
+    rows = {
+        max_rows = 5,
+        order = {
+            "datetime",
+            "featured_recent",
+            "featured_custom",
+            "featured_tbr",
+            "stats_triplet",
+            "reading_goals",
+            "strip_recent",
+            "strip_custom",
+            "strip_tbr",
+            "quotes",
+        },
+        enabled = {
+            datetime = false,
+            featured_custom = false,
+            featured_recent = true,
+            featured_tbr = false,
+            quotes = false,
+            reading_goals = false,
+            stats_triplet = false,
+            strip_custom = false,
+            strip_recent = true,
+            strip_tbr = false,
+        },
+    },
+    middle_stats_triplet = {
+        "today_pages",
+        "today_duration",
+        "streak",
+    },
+    goals = {
+        daily_pages_target = 30,
+        daily_target = 30,
+        daily_time_target_min = 30,
+        metric = "pages",
+        period = "daily",
+        weekly_pages_target = 210,
+        weekly_target = 210,
+        weekly_time_target_min = 210,
+    },
+    show_status_bar = false,
+    modules = {
+        datetime = {
+            show_module_title = false,
+        },
+        featured_custom = {
+            interactive = true,
+            order = "default",
+            progress_meta = {
+                left = "percent",
+                right = "total_pages",
+            },
+            show_description = true,
+            show_module_title = true,
+            show_status_bar = false,
+            status_bar_bold_text = true,
+            status_bar_show_bottom_border = true,
+        },
+        featured_recent = {
+            interactive = true,
+            order = "default",
+            progress_meta = {
+                left = "percent",
+                right = "total_pages",
+            },
+            show_description = true,
+            show_module_title = false,
+            show_status_bar = true,
+            status_bar_bold_text = true,
+            status_bar_show_bottom_border = true,
+        },
+        featured_tbr = {
+            interactive = true,
+            order = "default",
+            progress_meta = {
+                left = "percent",
+                right = "total_pages",
+            },
+            show_description = true,
+            show_module_title = true,
+            show_status_bar = false,
+            status_bar_bold_text = true,
+            status_bar_show_bottom_border = true,
+        },
+        quotes = {
+            show_module_title = false,
+        },
+        reading_goals = {
+            show_module_title = false,
+        },
+        stats_triplet = {
+            stat_style = "divider",
+            show_module_title = false,
+        },
+        strip_custom = {
+            count = 5,
+            interactive = true,
+            order = "default",
+            paths = {},
+            show_badges = false,
+            show_module_title = false,
+            show_strip_titles = false,
+            two_rows = false,
+        },
+        strip_recent = {
+            count = 5,
+            interactive = true,
+            order = "default",
+            show_badges = false,
+            show_module_title = false,
+            show_strip_titles = false,
+            two_rows = true,
+        },
+        strip_tbr = {
+            count = 5,
+            interactive = true,
+            order = "default",
+            show_badges = false,
+            show_module_title = false,
+            show_strip_titles = false,
+            two_rows = false,
+        },
+    },
+    quotes = {
+        day_seed = 741666,
+        manual_index = 11,
+        show_author = true,
+    },
+}
+
+local HOME_KEYS = {
     "title",
     "rows",
     "middle_stats_triplet",
@@ -157,8 +292,8 @@ function M.copy(value)
     return deepcopy(value)
 end
 
-function M.defaultDashboardPage()
-    local page = deepcopy(DEFAULT_DASHBOARD_PAGE)
+function M.defaultHomePage()
+    local page = deepcopy(DEFAULT_HOME_PAGE)
     page.active_preset = M.DEFAULT_PRESET_NAME
     return page
 end
@@ -168,9 +303,22 @@ function M.getBuiltinPresets()
         {
             name = M.DEFAULT_PRESET_NAME,
             builtin = true,
-            dashboard_page = deepcopy(DEFAULT_DASHBOARD_PAGE),
+            home_page = deepcopy(DEFAULT_HOME_PAGE),
+        },
+        {
+            name = "Bookshelf",
+            builtin = true,
+            home_page = deepcopy(BOOKSHELF_HOME_PAGE),
         },
     }
+end
+
+function M.isBuiltinPresetName(name)
+    if type(name) ~= "string" then return false end
+    for _i, preset in ipairs(M.getBuiltinPresets()) do
+        if preset.name == name then return true end
+    end
+    return false
 end
 
 function M.ensurePresetState(dcfg)
@@ -179,21 +327,21 @@ function M.ensurePresetState(dcfg)
     end
 end
 
-function M.captureDashboardPage(dcfg)
+function M.captureHomePage(dcfg)
     local out = {}
-    for _i, key in ipairs(DASHBOARD_KEYS) do
+    for _i, key in ipairs(HOME_KEYS) do
         out[key] = deepcopy(dcfg[key])
     end
     return out
 end
 
-function M.applyDashboardPagePreset(dcfg, preset)
+function M.applyHomePagePreset(dcfg, preset)
     if type(dcfg) ~= "table" or type(preset) ~= "table" then return end
-    local source = type(preset.dashboard_page) == "table" and preset.dashboard_page or preset
+    local source = type(preset.home_page) == "table" and preset.home_page or preset
     if source.title == nil and type(preset.name) == "string" then
         dcfg.title = preset.name
     end
-    for _i, key in ipairs(DASHBOARD_KEYS) do
+    for _i, key in ipairs(HOME_KEYS) do
         if source[key] ~= nil then
             dcfg[key] = deepcopy(source[key])
         end

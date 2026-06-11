@@ -1,4 +1,4 @@
-local shared = require("modules/filebrowser/patches/dashboard/widgets/strip_common")
+local shared = require("modules/filebrowser/patches/home/widgets/strip_common")
 
 return {
     id = "strip_tbr",

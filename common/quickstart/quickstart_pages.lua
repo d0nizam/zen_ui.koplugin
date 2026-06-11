@@ -705,6 +705,7 @@ function M.build_install_pages(ctx)
             choice_type    = "checkbox",
             max_selections = 7,
             choices        = {
+                { id = "home",        text = _("Home"),        checked = show_tabs["home"]        ~= false },
                 { id = "continue",    text = _("Continue"),    checked = show_tabs["continue"]    == true },
                 { id = "history",     text = _("History"),     checked = show_tabs["history"]     == true },
                 { id = "favorites",   text = _("Favorites"),   checked = show_tabs["favorites"]   == true },
@@ -718,7 +719,7 @@ function M.build_install_pages(ctx)
             on_apply = function(sel)
                 if type(config.navbar) ~= "table" then config.navbar = {} end
                 if type(config.navbar.show_tabs) ~= "table" then config.navbar.show_tabs = {} end
-                local tabs = { "continue", "history", "favorites", "collections",
+                local tabs = { "home", "continue", "history", "favorites", "collections",
                                "authors", "series", "to_be_read", "search", "stats" }
                 for _i, id in ipairs(tabs) do
                     config.navbar.show_tabs[id] = sel[id] == true

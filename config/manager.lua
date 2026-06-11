@@ -1,7 +1,7 @@
 local defaults = require("config/defaults")
-local DashboardPresets = require("modules/filebrowser/patches/dashboard/dashboard_presets")
+local HomePresets = require("modules/filebrowser/patches/home/home_presets")
 local PresetStore = require("config/preset_store")
-local DashboardQuotes = require("modules/filebrowser/patches/dashboard/dashboard_quotes")
+local HomeQuotes = require("modules/filebrowser/patches/home/home_quotes")
 local utils = require("common/utils")
 
 local LEGACY_KEY = "zen_ui_config"  -- legacy G_reader_settings key; cleanup only
@@ -49,29 +49,33 @@ end
 
 local function normalize_renamed_keys(cfg)
     if type(cfg) ~= "table" then
-        return cfg
+        return cfg, false
     end
 
     cfg.features = cfg.features or {}
+    local changed = false
 
     if cfg.features.disable_top_menu_swipe_zones == nil
        and cfg.features.disable_top_menu_zones ~= nil then
         cfg.features.disable_top_menu_swipe_zones = cfg.features.disable_top_menu_zones
+        changed = true
     end
 
     if cfg.features.browser_hide_up_folder == nil
        and cfg.features.browser_up_folder ~= nil then
         cfg.features.browser_hide_up_folder = cfg.features.browser_up_folder
+        changed = true
     end
 
     if cfg.browser_hide_up_folder == nil and cfg.browser_up_folder ~= nil then
         cfg.browser_hide_up_folder = cfg.browser_up_folder
+        changed = true
     end
 
     -- Always-on features: no user toggle in Zen settings.
     cfg.features.browser_folder_cover = true
 
-    return cfg
+    return cfg, changed
 end
 
 local function collect_setting_keys(g_settings)
@@ -521,12 +525,42 @@ local function capture_screensaver_settings()
     }
 end
 
+local function capture_reader_footer_settings()
+    local g = rawget(_G, "G_reader_settings")
+    if not g then return {} end
+    local util = require("util")
+    local footer = g:readSetting("footer")
+    return {
+        footer = type(footer) == "table" and util.tableDeepCopy(footer) or {},
+        reader_footer_mode = g:readSetting("reader_footer_mode") or 1,
+        reader_footer_custom_text = g:readSetting("reader_footer_custom_text") or "KOReader",
+        reader_footer_custom_text_repetitions = g:readSetting("reader_footer_custom_text_repetitions") or 1,
+    }
+end
+
+local function migrate_reader_footer_backup(cfg)
+    if type(cfg) ~= "table" or type(cfg.reader_footer) ~= "table" then
+        return false
+    end
+    local backup = cfg.reader_footer.backup_preset
+    if type(backup) ~= "table" then return false end
+    if type(backup.name) ~= "string" or backup.name == "" then
+        backup.name = "Backup of Original"
+    end
+    backup.builtin = true
+    PresetStore.save("reader", backup.name, backup)
+    PresetStore.saveSettings("reader", capture_reader_footer_settings())
+    cfg.reader_footer.backup_preset = nil
+    return true
+end
+
 local function migrate_settings_files()
     local changed = PresetStore.migrateStores({
-        dashboard = DashboardPresets.defaultDashboardPage(),
+        home = HomePresets.defaultHomePage(),
+        reader = capture_reader_footer_settings(),
         screensaver = capture_screensaver_settings(),
     })
-    if DashboardQuotes.ensureFile() then
+    if HomeQuotes.ensureFile() then
         changed = true
     end
     return changed
@@ -557,15 +591,18 @@ function M.load()
     end
 
     local cfg = merged_with_defaults(stored)
-    cfg = normalize_renamed_keys(cfg)
+    local migrated_renamed
+    cfg, migrated_renamed = normalize_renamed_keys(cfg)
     local migrated_group, migrated_updater, migrated_fbc, migrated_bim
     cfg, migrated_group   = migrate_legacy_group_view_keys(cfg)
     cfg, migrated_updater = migrate_legacy_updater_keys(cfg)
     cfg, migrated_fbc     = migrate_folder_cover_keys(cfg)
     cfg, migrated_bim     = migrate_bim_folder_cover_keys(cfg)
+    local migrated_reader_backup = migrate_reader_footer_backup(cfg)
     local migrated_settings_files = migrate_settings_files()
-    if migrated_group or migrated_updater or migrated_fbc or migrated_bim
-            or migrated_qs or migrated_file_config or migrated_settings_files then
+    if migrated_renamed or migrated_group or migrated_updater or migrated_fbc or migrated_bim
+            or migrated_reader_backup or migrated_qs or migrated_file_config
+            or migrated_settings_files then
         M.save(cfg)
     end
     if migrated_file_config then

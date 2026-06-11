@@ -546,10 +546,10 @@ msgstr "1日の時間目標 (分)"
 msgid "Daily time goal (min): "
 msgstr "1日の時間目標 (分): "
 
-msgid "Dashboard"
+msgid "Home page"
 msgstr "ダッシュボード"
 
-msgid "Dashboard preset"
+msgid "Home page preset"
 msgstr "ダッシュボードプリセット"
 
 msgid "date modified"
@@ -1278,6 +1278,9 @@ msgstr "プリセット名"
 msgid "Presets"
 msgstr "プリセット"
 
+msgid "Zen Presets"
+msgstr "Zen Presets"
+
 msgid "Prev"
 msgstr "前へ"
 
@@ -1464,7 +1467,7 @@ msgstr "RSS Readerプラグインがインストールされていません。"
 msgid "Save"
 msgstr "保存"
 
-msgid "Save current dashboard as preset"
+msgid "Save current home page as preset"
 msgstr "現在のダッシュボードをプリセットとして保存"
 
 msgid "Save current settings as preset"

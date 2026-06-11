@@ -169,17 +169,22 @@ function ZenUI:init()
     if not self.config._meta.footer_backup_created then
         local footer_settings = G_reader_settings:readSetting("footer")
         if footer_settings then
+            local PresetStore = require("config/preset_store")
             local util = require("util")
             if type(self.config.reader_footer) ~= "table" then
                 self.config.reader_footer = {}
             end
-            self.config.reader_footer.backup_preset = {
+            local backup = {
                 name = "Backup of Original",
+                builtin = true,
                 footer = util.tableDeepCopy(footer_settings),
                 reader_footer_mode = G_reader_settings:readSetting("reader_footer_mode") or 1,
                 reader_footer_custom_text = G_reader_settings:readSetting("reader_footer_custom_text") or "KOReader",
                 reader_footer_custom_text_repetitions = G_reader_settings:readSetting("reader_footer_custom_text_repetitions") or 1,
             }
+            PresetStore.save("reader", backup.name, backup)
+            PresetStore.saveSettings("reader", backup)
+            PresetStore.setActivePreset("reader", backup.name)
             self.config._meta.footer_backup_created = true
             self:saveConfig()
         end
@@ -539,7 +544,7 @@ end
 
 local function close_zen_standalone_views(shared)
     if type(shared) ~= "table" then return end
-    for _i, key in ipairs({ "group_view", "dashboard" }) do
+    for _i, key in ipairs({ "group_view", "home" }) do
         local view = shared[key]
         if view and type(view.closeAll) == "function" then
             local ok, err = pcall(view.closeAll)

@@ -1,9 +1,9 @@
 local _ = require("gettext")
 local UIManager = require("ui/uimanager")
 
-local DashboardPresets = require("modules/filebrowser/patches/dashboard/dashboard_presets")
+local HomePresets = require("modules/filebrowser/patches/home/home_presets")
 local PresetStore = require("config/preset_store")
-local Registry = require("modules/filebrowser/patches/dashboard/components/registry")
+local Registry = require("modules/filebrowser/patches/home/components/registry")
 
 local M = {}
 
@@ -109,10 +109,11 @@ local function ensure_strip_cfg(dcfg, module_id)
         if mcfg.count > 5 then mcfg.count = 5 end
     end
     if mcfg.show_strip_titles == nil then mcfg.show_strip_titles = false end
+    if mcfg.show_badges == nil then mcfg.show_badges = false end
     return mcfg
 end
 
-local function ensure_dashboard_widget_cfg(dcfg)
+local function ensure_home_widget_cfg(dcfg)
     local featured_custom = ensure_featured_cfg(dcfg, "featured_custom")
     if type(featured_custom.path) ~= "string" then featured_custom.path = nil end
     ensure_featured_cfg(dcfg, "featured_tbr")
@@ -128,11 +129,11 @@ local function ensure_dashboard_widget_cfg(dcfg)
 end
 
 local function ensure_cfg(_config)
-    local dcfg = PresetStore.getSettings("dashboard")
+    local dcfg = PresetStore.getSettings("home")
     if type(dcfg) ~= "table" or next(dcfg) == nil then
-        dcfg = DashboardPresets.defaultDashboardPage()
+        dcfg = HomePresets.defaultHomePage()
     end
-    DashboardPresets.ensurePresetState(dcfg)
+    HomePresets.ensurePresetState(dcfg)
 
     if type(dcfg.rows) ~= "table" then dcfg.rows = {} end
     if type(dcfg.rows.order) ~= "table" then dcfg.rows.order = {} end
@@ -195,7 +196,7 @@ local function ensure_cfg(_config)
     for _i, comp in ipairs(Registry.list()) do
         ensure_module_cfg(dcfg, comp.id)
     end
-    ensure_dashboard_widget_cfg(dcfg)
+    ensure_home_widget_cfg(dcfg)
 
     return dcfg
 end
@@ -216,7 +217,7 @@ local function list_ids()
     return ids
 end
 
-local dashboard_max_widgets = 5
+local home_max_widgets = 5
 local custom_strip_max_books = 50
 
 local function sort_order_with_defaults(order)
@@ -251,14 +252,47 @@ end
 function M.build(ctx)
     local config = ctx.config
     local dcfg = ensure_cfg(config)
-    local dashboard_rebuild_pending = false
-    local dashboard_rebuild_poll_active = false
-    local schedule_dashboard_rebuild_on_menu_close
+    local home_rebuild_pending = false
+    local home_rebuild_poll_active = false
+    local schedule_home_rebuild_on_menu_close
 
-    local function save_dashboard()
-        PresetStore.saveSettings("dashboard", dcfg)
-        dashboard_rebuild_pending = true
-        schedule_dashboard_rebuild_on_menu_close()
+    local function unique_user_preset_name(base)
+        if not PresetStore.find("home", base) then return base end
+        local i = 2
+        while PresetStore.find("home", base .. " " .. i) do
+            i = i + 1
+        end
+        return base .. " " .. i
+    end
+
+    local function editable_name_for_builtin(preset_name)
+        if preset_name == HomePresets.DEFAULT_PRESET_NAME then
+            return HomePresets.CUSTOM_PRESET_NAME
+        end
+        return tostring(preset_name or HomePresets.CUSTOM_PRESET_NAME) .. " custom"
+    end
+
+    local function copy_builtin_for_editing(preset_name)
+        local name = unique_user_preset_name(editable_name_for_builtin(preset_name))
+        dcfg.active_preset = name
+        dcfg.title = name
+        local state = HomePresets.captureHomePage(dcfg)
+        state.title = name
+        PresetStore.save("home", name, state)
+        PresetStore.setActivePreset("home", name)
+        return name
+    end
+
+    local function make_builtin_editable()
+        if not HomePresets.isBuiltinPresetName(dcfg.active_preset) then return end
+        copy_builtin_for_editing(dcfg.active_preset)
+    end
+
+    local function save_home()
+        make_builtin_editable()
+        PresetStore.saveSettings("home", dcfg)
+        home_rebuild_pending = true
+        schedule_home_rebuild_on_menu_close()
     end
 
     local function is_filemanager_menu_open()
@@ -277,28 +311,28 @@ function M.build(ctx)
         return false
     end
 
-    schedule_dashboard_rebuild_on_menu_close = function()
-        if dashboard_rebuild_poll_active then return end
-        dashboard_rebuild_poll_active = true
+    schedule_home_rebuild_on_menu_close = function()
+        if home_rebuild_poll_active then return end
+        home_rebuild_poll_active = true
         local function tick()
             local plugin = ctx.plugin or rawget(_G, "__ZEN_UI_PLUGIN")
-            local dash = plugin
+            local home = plugin
                 and plugin._zen_shared
-                and plugin._zen_shared.dashboard
-            local dashboard_waiting = dash
-                and dash.hasActive
-                and dash.hasActive()
-                and dash.isActiveOnTop
-                and not dash.isActiveOnTop()
-            if is_filemanager_menu_open() or dashboard_waiting then
+                and plugin._zen_shared.home
+            local home_waiting = home
+                and home.hasActive
+                and home.hasActive()
+                and home.isActiveOnTop
+                and not home.isActiveOnTop()
+            if is_filemanager_menu_open() or home_waiting then
                 UIManager:scheduleIn(0.25, tick)
                 return
             end
-            dashboard_rebuild_poll_active = false
-            if not dashboard_rebuild_pending then return end
-            dashboard_rebuild_pending = false
-            if dash and dash.rebuildActive then
-                dash.rebuildActive()
+            home_rebuild_poll_active = false
+            if not home_rebuild_pending then return end
+            home_rebuild_pending = false
+            if home and home.rebuildActive then
+                home.rebuildActive()
             end
         end
         UIManager:scheduleIn(0.25, tick)
@@ -342,7 +376,7 @@ function M.build(ctx)
                 end,
                 callback = function()
                     mcfg.order = order_id
-                    save_dashboard("reinit")
+                    save_home("reinit")
                 end,
             }
         end
@@ -363,7 +397,7 @@ function M.build(ctx)
                     end,
                     callback = function()
                         mcfg.progress_meta[side] = metric
-                        save_dashboard("reinit")
+                        save_home("reinit")
                     end,
                 }
             end
@@ -393,7 +427,7 @@ function M.build(ctx)
             end,
             callback = function()
                 mcfg.interactive = mcfg.interactive == false
-                save_dashboard("reinit")
+                save_home("reinit")
             end,
         }
     end
@@ -406,7 +440,7 @@ function M.build(ctx)
             end,
             callback = function()
                 mcfg.show_status_bar = mcfg.show_status_bar ~= true
-                save_dashboard("reinit")
+                save_home("reinit")
             end,
         }
     end
@@ -421,7 +455,7 @@ function M.build(ctx)
                 end,
                 callback = function()
                     mcfg.status_bar_show_bottom_border = mcfg.status_bar_show_bottom_border == false
-                    save_dashboard("reinit")
+                    save_home("reinit")
                 end,
             },
             {
@@ -431,7 +465,7 @@ function M.build(ctx)
                 end,
                 callback = function()
                     mcfg.status_bar_bold_text = mcfg.status_bar_bold_text == false
-                    save_dashboard("reinit")
+                    save_home("reinit")
                 end,
             },
         }
@@ -478,7 +512,7 @@ function M.build(ctx)
                 end,
                 callback = function()
                     mcfg.show_module_title = mcfg.show_module_title ~= true
-                    save_dashboard("reinit")
+                    save_home("reinit")
                 end,
             },
             {
@@ -489,7 +523,7 @@ function M.build(ctx)
                 callback = function(touchmenu_instance)
                     choose_book(function(path)
                         mcfg.path = path
-                        save_dashboard("reinit")
+                        save_home("reinit")
                         if touchmenu_instance then touchmenu_instance:updateItems() end
                     end)
                 end,
@@ -506,7 +540,7 @@ function M.build(ctx)
                 end,
                 callback = function()
                     mcfg.show_description = mcfg.show_description == false
-                    save_dashboard("reinit")
+                    save_home("reinit")
                 end,
             },
             {
@@ -520,7 +554,7 @@ function M.build(ctx)
                 end,
                 callback = function()
                     mcfg.path = nil
-                    save_dashboard("reinit")
+                    save_home("reinit")
                 end,
             },
         }
@@ -536,7 +570,7 @@ function M.build(ctx)
                 end,
                 callback = function()
                     mcfg.show_module_title = mcfg.show_module_title ~= true
-                    save_dashboard("reinit")
+                    save_home("reinit")
                 end,
             },
             interactive_item(mcfg),
@@ -552,7 +586,7 @@ function M.build(ctx)
                             if existing == path then return end
                         end
                         mcfg.paths[#mcfg.paths + 1] = path
-                        save_dashboard("reinit")
+                        save_home("reinit")
                         if touchmenu_instance then
                             touchmenu_instance.item_table = build_strip_custom_items(mcfg)
                             touchmenu_instance:updateItems()
@@ -567,7 +601,17 @@ function M.build(ctx)
                 end,
                 callback = function()
                     mcfg.show_strip_titles = mcfg.show_strip_titles ~= true
-                    save_dashboard("reinit")
+                    save_home("reinit")
+                end,
+            },
+            {
+                text = _("Show badges"),
+                checked_func = function()
+                    return mcfg.show_badges == true
+                end,
+                callback = function()
+                    mcfg.show_badges = mcfg.show_badges ~= true
+                    save_home("reinit")
                 end,
             },
         }
@@ -577,7 +621,7 @@ function M.build(ctx)
                 text = _("Remove: ") .. path_label(path),
                 callback = function()
                     table.remove(mcfg.paths, i)
-                    save_dashboard("reinit")
+                    save_home("reinit")
                 end,
             }
         end
@@ -589,7 +633,7 @@ function M.build(ctx)
             end,
             callback = function()
                 mcfg.paths = {}
-                save_dashboard("reinit")
+                save_home("reinit")
             end,
         }
         return items
@@ -608,7 +652,7 @@ function M.build(ctx)
                 end,
                 callback = function()
                     mcfg.show_module_title = mcfg.show_module_title ~= true
-                    save_dashboard("reinit")
+                    save_home("reinit")
                 end,
             },
             interactive_item(mcfg),
@@ -627,7 +671,7 @@ function M.build(ctx)
                 end,
                 callback = function()
                     mcfg.show_description = mcfg.show_description == false
-                    save_dashboard("reinit")
+                    save_home("reinit")
                 end,
             },
             {
@@ -650,7 +694,7 @@ function M.build(ctx)
                 end,
                 callback = function()
                     mcfg.show_module_title = mcfg.show_module_title ~= true
-                    save_dashboard("reinit")
+                    save_home("reinit")
                 end,
             },
             interactive_item(mcfg),
@@ -670,7 +714,7 @@ function M.build(ctx)
                     else
                         mcfg.count = 5
                     end
-                    save_dashboard("reinit")
+                    save_home("reinit")
                 end,
             },
             {
@@ -688,7 +732,7 @@ function M.build(ctx)
                         value_max = is_two and 10 or 5,
                         callback = function(spin)
                             mcfg.count = spin.value
-                            save_dashboard("reinit")
+                            save_home("reinit")
                         end,
                     })
                 end,
@@ -700,7 +744,17 @@ function M.build(ctx)
                 end,
                 callback = function()
                     mcfg.show_strip_titles = mcfg.show_strip_titles ~= true
-                    save_dashboard("reinit")
+                    save_home("reinit")
+                end,
+            },
+            {
+                text = _("Show badges"),
+                checked_func = function()
+                    return mcfg.show_badges == true
+                end,
+                callback = function()
+                    mcfg.show_badges = mcfg.show_badges ~= true
+                    save_home("reinit")
                 end,
             },
         }
@@ -718,14 +772,14 @@ function M.build(ctx)
                 end,
                 enabled_func = function()
                     return dcfg.rows.enabled[cid] == true
-                        or enabled_count(dcfg.rows.enabled) < dashboard_max_widgets
+                        or enabled_count(dcfg.rows.enabled) < home_max_widgets
                 end,
                 callback = function()
                     if dcfg.rows.enabled[cid] == true then
                         if enabled_count(dcfg.rows.enabled) <= 1 then return end
                         dcfg.rows.enabled[cid] = false
                     else
-                        if enabled_count(dcfg.rows.enabled) >= dashboard_max_widgets then
+                        if enabled_count(dcfg.rows.enabled) >= home_max_widgets then
                             local InfoMessage = require("ui/widget/infomessage")
                             UIManager:show(InfoMessage:new{
                                 text = _("Maximum 5 widgets allowed"),
@@ -734,7 +788,7 @@ function M.build(ctx)
                         end
                         dcfg.rows.enabled[cid] = true
                     end
-                    save_dashboard("reinit")
+                    save_home("reinit")
                 end,
             }
         end
@@ -762,36 +816,40 @@ function M.build(ctx)
                     new_order[#new_order + 1] = item.orig_item
                 end
                 dcfg.rows.order = new_order
-                save_dashboard("reinit")
+                save_home("reinit")
             end,
         })
     end
 
-    local function all_dashboard_presets()
-        local all = DashboardPresets.getBuiltinPresets()
-        local presets = PresetStore.list("dashboard")
+    local function all_home_presets()
+        local all = HomePresets.getBuiltinPresets()
+        local presets = PresetStore.list("home")
         for _i, preset in ipairs(presets) do
             all[#all + 1] = preset
         end
         return all
     end
 
-    local function apply_dashboard_preset(preset, touchmenu_instance)
+    local function apply_home_preset(preset, touchmenu_instance)
         local preset_name = preset and preset.name
-        DashboardPresets.applyDashboardPagePreset(dcfg, preset)
-        dcfg.active_preset = preset_name
-        PresetStore.setActivePreset("dashboard", preset_name)
+        HomePresets.applyHomePagePreset(dcfg, preset)
+        if preset and preset.builtin == true then
+            copy_builtin_for_editing(preset_name)
+        else
+            dcfg.active_preset = preset_name
+            PresetStore.setActivePreset("home", preset_name)
+        end
         ensure_cfg(config)
-        save_dashboard("reinit")
+        save_home("reinit")
         if touchmenu_instance then touchmenu_instance:updateItems() end
     end
 
     local function build_preset_items()
-        local all = all_dashboard_presets()
+        local all = all_home_presets()
         local items = {}
 
         items[#items + 1] = {
-            text = _("Save current dashboard as preset"),
+            text = _("Save current home page as preset"),
             keep_menu_open = true,
             callback = function(touchmenu_instance)
                 local InputDialog = require("ui/widget/inputdialog")
@@ -799,7 +857,7 @@ function M.build(ctx)
                 dlg = InputDialog:new{
                     title = _("Preset name"),
                     input = "",
-                    input_hint = _("Dashboard preset"),
+                    input_hint = _("Home page preset"),
                     buttons = {{
                         {
                             text = _("Cancel"),
@@ -813,13 +871,16 @@ function M.build(ctx)
                                 local name = dlg:getInputText()
                                 if not name or name:match("^%s*$") then return end
                                 name = name:match("^%s*(.-)%s*$")
+                                if HomePresets.isBuiltinPresetName(name) then
+                                    name = unique_user_preset_name(HomePresets.CUSTOM_PRESET_NAME)
+                                end
                                 UIManager:close(dlg)
-                                local state = DashboardPresets.captureDashboardPage(dcfg)
+                                local state = HomePresets.captureHomePage(dcfg)
                                 state.title = name
-                                PresetStore.save("dashboard", name, state)
+                                PresetStore.save("home", name, state)
                                 dcfg.active_preset = name
-                                PresetStore.setActivePreset("dashboard", name)
-                                save_dashboard("reinit")
+                                PresetStore.setActivePreset("home", name)
+                                save_home("reinit")
                                 if touchmenu_instance then
                                     touchmenu_instance.item_table = build_preset_items()
                                     touchmenu_instance:updateItems()
@@ -843,7 +904,7 @@ function M.build(ctx)
                     return prefix .. (preset_name or _("Unnamed preset"))
                 end,
                 callback = function(touchmenu_instance)
-                    apply_dashboard_preset(preset, touchmenu_instance)
+                    apply_home_preset(preset, touchmenu_instance)
                 end,
                 hold_callback = not is_builtin and function(touchmenu_instance)
                     local ConfirmBox = require("ui/widget/confirmbox")
@@ -851,12 +912,12 @@ function M.build(ctx)
                         text = _("Delete preset?") .. "\n\n" .. (preset_name or ""),
                         ok_text = _("Delete"),
                         ok_callback = function()
-                            PresetStore.delete("dashboard", preset_name)
+                            PresetStore.delete("home", preset_name)
                             if dcfg.active_preset == preset_name then
                                 dcfg.active_preset = nil
-                                PresetStore.setActivePreset("dashboard", nil)
+                                PresetStore.setActivePreset("home", nil)
                             end
-                            save_dashboard("reinit")
+                            save_home("reinit")
                             if touchmenu_instance then
                                 touchmenu_instance.item_table = build_preset_items()
                                 touchmenu_instance:updateItems()
@@ -881,7 +942,7 @@ function M.build(ctx)
                 end,
                 callback = function()
                     goals_cfg.show_module_title = goals_cfg.show_module_title ~= true
-                    save_dashboard("reinit")
+                    save_home("reinit")
                 end,
             }
         end)(),
@@ -891,7 +952,7 @@ function M.build(ctx)
             checked_func = function() return dcfg.goals.period ~= "weekly" end,
             callback = function()
                 dcfg.goals.period = "daily"
-                save_dashboard("reinit")
+                save_home("reinit")
             end,
         },
         {
@@ -900,7 +961,7 @@ function M.build(ctx)
             checked_func = function() return dcfg.goals.period == "weekly" end,
             callback = function()
                 dcfg.goals.period = "weekly"
-                save_dashboard("reinit")
+                save_home("reinit")
             end,
         },
         {
@@ -909,7 +970,7 @@ function M.build(ctx)
             checked_func = function() return dcfg.goals.metric ~= "time" end,
             callback = function()
                 dcfg.goals.metric = "pages"
-                save_dashboard("reinit")
+                save_home("reinit")
             end,
         },
         {
@@ -918,7 +979,7 @@ function M.build(ctx)
             checked_func = function() return dcfg.goals.metric == "time" end,
             callback = function()
                 dcfg.goals.metric = "time"
-                save_dashboard("reinit")
+                save_home("reinit")
             end,
         },
         {
@@ -933,7 +994,7 @@ function M.build(ctx)
                     value_max = 5000,
                     callback = function(spin)
                         dcfg.goals.daily_pages_target = spin.value
-                        save_dashboard("reinit")
+                        save_home("reinit")
                     end,
                 })
             end,
@@ -950,7 +1011,7 @@ function M.build(ctx)
                     value_max = 20000,
                     callback = function(spin)
                         dcfg.goals.weekly_pages_target = spin.value
-                        save_dashboard("reinit")
+                        save_home("reinit")
                     end,
                 })
             end,
@@ -967,7 +1028,7 @@ function M.build(ctx)
                     value_max = 1440,
                     callback = function(spin)
                         dcfg.goals.daily_time_target_min = spin.value
-                        save_dashboard("reinit")
+                        save_home("reinit")
                     end,
                 })
             end,
@@ -984,7 +1045,7 @@ function M.build(ctx)
                     value_max = 10080,
                     callback = function(spin)
                         dcfg.goals.weekly_time_target_min = spin.value
-                        save_dashboard("reinit")
+                        save_home("reinit")
                     end,
                 })
             end,
@@ -1008,7 +1069,7 @@ function M.build(ctx)
             end,
             callback = function()
                 stats_cfg.show_module_title = stats_cfg.show_module_title ~= true
-                save_dashboard("reinit")
+                save_home("reinit")
             end,
         },
         {
@@ -1022,7 +1083,7 @@ function M.build(ctx)
                     end,
                     callback = function()
                         stats_cfg.stat_style = "divider"
-                        save_dashboard("reinit")
+                        save_home("reinit")
                     end,
                 },
                 {
@@ -1033,7 +1094,7 @@ function M.build(ctx)
                     end,
                     callback = function()
                         stats_cfg.stat_style = "outline"
-                        save_dashboard("reinit")
+                        save_home("reinit")
                     end,
                 },
                 {
@@ -1044,7 +1105,7 @@ function M.build(ctx)
                     end,
                     callback = function()
                         stats_cfg.stat_style = "none"
-                        save_dashboard("reinit")
+                        save_home("reinit")
                     end,
                 },
             },
@@ -1068,7 +1129,7 @@ function M.build(ctx)
                         end,
                         callback = function()
                             dcfg.middle_stats_triplet[slot] = oid
-                            save_dashboard("reinit")
+                            save_home("reinit")
                         end,
                     }
                 end
@@ -1078,7 +1139,7 @@ function M.build(ctx)
     end
 
     return {
-        text = _("Dashboard"),
+        text = _("Home page"),
         sub_item_table = {
             {
                 text = _("Widgets"),
@@ -1103,7 +1164,7 @@ function M.build(ctx)
                         end,
                         callback = function()
                             dcfg.show_status_bar = dcfg.show_status_bar == false
-                            save_dashboard("reinit")
+                            save_home("reinit")
                         end,
                     },
                     {
@@ -1160,7 +1221,7 @@ function M.build(ctx)
                                     end,
                                     callback = function()
                                         quotes_cfg.show_module_title = quotes_cfg.show_module_title ~= true
-                                        save_dashboard("reinit")
+                                        save_home("reinit")
                                     end,
                                 }
                             end)(),
@@ -1171,7 +1232,7 @@ function M.build(ctx)
                                 end,
                                 callback = function()
                                     dcfg.quotes.show_author = dcfg.quotes.show_author == false
-                                    save_dashboard("reinit")
+                                    save_home("reinit")
                                 end,
                             },
                         },

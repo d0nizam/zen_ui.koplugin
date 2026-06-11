@@ -546,10 +546,10 @@ msgstr "Дневная цель по времени (мин)"
 msgid "Daily time goal (min): "
 msgstr "Дневная цель по времени (мин): "
 
-msgid "Dashboard"
+msgid "Home page"
 msgstr "Панель"
 
-msgid "Dashboard preset"
+msgid "Home page preset"
 msgstr "Пресет панели"
 
 msgid "date modified"
@@ -1278,6 +1278,9 @@ msgstr "Название предустановки"
 msgid "Presets"
 msgstr "Предустановки"
 
+msgid "Zen Presets"
+msgstr "Zen Presets"
+
 msgid "Prev"
 msgstr "Назад"
 
@@ -1464,7 +1467,7 @@ msgstr "Плагин RSS Reader не установлен."
 msgid "Save"
 msgstr "Сохранить"
 
-msgid "Save current dashboard as preset"
+msgid "Save current home page as preset"
 msgstr "Сохранить текущую панель как пресет"
 
 msgid "Save current settings as preset"

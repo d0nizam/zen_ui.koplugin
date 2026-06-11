@@ -1,4 +1,4 @@
-local shared = require("modules/filebrowser/patches/dashboard/widgets/featured_common")
+local shared = require("modules/filebrowser/patches/home/widgets/featured_common")
 
 return {
     id = "featured_tbr",

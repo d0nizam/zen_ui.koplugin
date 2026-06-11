@@ -555,10 +555,10 @@ msgstr "Дневна цел за време (мин)"
 msgid "Daily time goal (min): "
 msgstr "Дневна цел за време (мин): "
 
-msgid "Dashboard"
+msgid "Home page"
 msgstr "Табло"
 
-msgid "Dashboard preset"
+msgid "Home page preset"
 msgstr "Предварителна настройка на таблото"
 
 msgid "date modified"
@@ -1287,6 +1287,9 @@ msgstr "Име на предварителната настройка"
 msgid "Presets"
 msgstr "Предварителни настройки"
 
+msgid "Zen Presets"
+msgstr "Zen Presets"
+
 msgid "Prev"
 msgstr "Назад"
 
@@ -1473,7 +1476,7 @@ msgstr "Добавката RSS четец не е инсталирана."
 msgid "Save"
 msgstr "Запазване"
 
-msgid "Save current dashboard as preset"
+msgid "Save current home page as preset"
 msgstr "Запазване на текущото табло като предварителна настройка"
 
 msgid "Save current settings as preset"

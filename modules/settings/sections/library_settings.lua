@@ -7,13 +7,12 @@ local UIManager = require("ui/uimanager")
 local paths = require("common/paths")
 
 local status_bar_section  = require("modules/settings/sections/library_settings/status_bar_settings")
-local dashboard_section   = require("modules/settings/sections/library_settings/dashboard_settings")
 local settings_apply      = require("modules/settings/zen_settings_apply")
 local zen_settings_utils  = require("modules/settings/zen_settings_utils")
 
 local M = {}
-local dashboard_rebuild_pending = false
-local dashboard_rebuild_poll_active = false
+local home_rebuild_pending = false
+local home_rebuild_poll_active = false
 
 local function is_filemanager_menu_open()
     local ok_fm, FileManager = pcall(require, "apps/filemanager/filemanager")
@@ -22,23 +21,23 @@ local function is_filemanager_menu_open()
     return fm.menu ~= nil and fm.menu.menu_container ~= nil
 end
 
-local function schedule_dashboard_rebuild_on_menu_close(plugin)
+local function schedule_home_rebuild_on_menu_close(plugin)
     if not plugin then return end
-    dashboard_rebuild_pending = true
-    if dashboard_rebuild_poll_active then return end
-    dashboard_rebuild_poll_active = true
+    home_rebuild_pending = true
+    if home_rebuild_poll_active then return end
+    home_rebuild_poll_active = true
 
     local function tick()
         if is_filemanager_menu_open() then
             UIManager:scheduleIn(0.25, tick)
             return
         end
-        dashboard_rebuild_poll_active = false
-        if not dashboard_rebuild_pending then return end
-        dashboard_rebuild_pending = false
-        local dash = plugin._zen_shared and plugin._zen_shared.dashboard
-        if dash and dash.rebuildActive then
-            dash.rebuildActive()
+        home_rebuild_poll_active = false
+        if not home_rebuild_pending then return end
+        home_rebuild_pending = false
+        local home = plugin._zen_shared and plugin._zen_shared.home
+        if home and home.rebuildActive then
+            home.rebuildActive()
         end
     end
 
@@ -65,7 +64,7 @@ local function save_library_font(config, plugin, touchmenu_instance, prompt_rest
     _G.__ZEN_UI_LIBRARY_FONT_CFG = config.library_font
     plugin:saveConfig()
     settings_apply.reinit_filemanager()
-    schedule_dashboard_rebuild_on_menu_close(plugin)
+    schedule_home_rebuild_on_menu_close(plugin)
     local strip_cfg = type(config.mosaic_title_strip) == "table" and config.mosaic_title_strip or nil
     if prompt_restart or (strip_cfg and (strip_cfg.show_title == true or strip_cfg.show_author == true)) then
         settings_apply.prompt_restart()
@@ -99,8 +98,6 @@ function M.build(ctx)
     local items = {}
 
     table.insert(items, status_bar_section.build(ctx))
-    table.insert(items, dashboard_section.build(ctx))
-
     table.insert(items, {
         text_func = function()
             local cfg = ensure_library_font_cfg(config)

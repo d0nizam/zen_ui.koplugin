@@ -546,10 +546,10 @@ msgstr "Meta diária de tempo (min)"
 msgid "Daily time goal (min): "
 msgstr "Meta diária de tempo (min): "
 
-msgid "Dashboard"
+msgid "Home page"
 msgstr "Painel"
 
-msgid "Dashboard preset"
+msgid "Home page preset"
 msgstr "Predefinição do painel"
 
 msgid "date modified"
@@ -1278,6 +1278,9 @@ msgstr "Nome do preset"
 msgid "Presets"
 msgstr "Predefinições"
 
+msgid "Zen Presets"
+msgstr "Zen Presets"
+
 msgid "Prev"
 msgstr "Anterior"
 
@@ -1464,7 +1467,7 @@ msgstr "O plugin RSS Reader não está instalado."
 msgid "Save"
 msgstr "Salvar"
 
-msgid "Save current dashboard as preset"
+msgid "Save current home page as preset"
 msgstr "Salvar painel atual como predefinição"
 
 msgid "Save current settings as preset"

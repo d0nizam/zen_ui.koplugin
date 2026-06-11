@@ -546,10 +546,10 @@ msgstr "Denní časový cíl (min)"
 msgid "Daily time goal (min): "
 msgstr "Denní časový cíl (min): "
 
-msgid "Dashboard"
+msgid "Home page"
 msgstr "Přehled"
 
-msgid "Dashboard preset"
+msgid "Home page preset"
 msgstr "Předvolba přehledu"
 
 msgid "date modified"
@@ -1278,6 +1278,9 @@ msgstr "Název předvolby"
 msgid "Presets"
 msgstr "Předvolby"
 
+msgid "Zen Presets"
+msgstr "Zen Presets"
+
 msgid "Prev"
 msgstr "Předchozí"
 
@@ -1464,7 +1467,7 @@ msgstr "Doplněk čtečky RSS není nainstalován."
 msgid "Save"
 msgstr "Uložit"
 
-msgid "Save current dashboard as preset"
+msgid "Save current home page as preset"
 msgstr "Uložit aktuální přehled jako předvolbu"
 
 msgid "Save current settings as preset"

@@ -667,7 +667,7 @@ local function apply_context_menu()
 
             local home_dir = paths.getHomeDir()
             local cur_path = self_fc.path or ""
-            if home_dir and not item._zen_collection_name and not item._zen_dashboard_context then
+            if home_dir and not item._zen_collection_name and not item._zen_home_context then
                 if not paths.isInHomeDir(cur_path) then
                     return orig_showFileDialog(self_fc, item)
                 end
@@ -1373,7 +1373,7 @@ local function apply_context_menu()
                 })
             end
 
-            if is_file and is_not_parent_folder and not item._zen_dashboard_context then
+            if is_file and is_not_parent_folder and not item._zen_home_context then
                 table.insert(buttons, {
                     {
                         text = "\u{F01BE}  " .. _("Move"),
@@ -1882,7 +1882,7 @@ local function apply_context_menu()
                 })
             end
 
-            if not item._zen_dashboard_context then
+            if not item._zen_home_context then
                 table.insert(buttons, {
                     {
                         text = "\u{F090C}  " .. _("Edit") .. "  " .. submenu_arrow,
