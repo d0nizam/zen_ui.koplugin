@@ -87,7 +87,7 @@ local defaults = {
         show_labels = true,
         books_label = "Library",
         home_label = "Home",
-        default_tab = "books",
+        default_tab = "home",
         manga_action = "rakuyomi",
         manga_folder = "",
         news_action = "quickrss",
@@ -98,7 +98,7 @@ local defaults = {
         active_tab_bold = false,
         active_tab_underline = true,
         underline_above = false,
-        show_top_border = true,
+        show_top_border = false,
     },
     quick_settings = {
         button_order = { "wifi", "night", "rotate", "zen", "lockdown", "usb", "search", "quickrss", "cloud", "zlibrary", "calibre", "notion", "streak", "opds", "filebrowser", "restart", "exit", "sleep" },
