@@ -86,6 +86,7 @@ local function apply_quick_settings()
         },
         show_frontlight = true,
         show_warmth = true,
+        rotate_action = "cycle",
         custom_buttons = {},  -- array of { id, label, icon, action }
         next_custom_id = 0,
     }
@@ -136,14 +137,14 @@ local function apply_quick_settings()
             -- Deduplicate existing entries, then append any new buttons from the default order
             local seen = {}
             local deduped = {}
-            for _, id in ipairs(config.button_order) do
+            for _i, id in ipairs(config.button_order) do
                 if not seen[id] then
                     seen[id] = true
                     table.insert(deduped, id)
                 end
             end
             config.button_order = deduped
-            for _, id in ipairs(config_default.button_order) do
+            for _i, id in ipairs(config_default.button_order) do
                 if not seen[id] then
                     seen[id] = true
                     table.insert(config.button_order, id)
@@ -154,7 +155,7 @@ local function apply_quick_settings()
         if type(config.custom_buttons) ~= "table" then config.custom_buttons = {} end
         if type(config.next_custom_id) ~= "number" then config.next_custom_id = 0 end
         local cb_ids = {}
-        for _, cb in ipairs(config.custom_buttons) do
+        for _i, cb in ipairs(config.custom_buttons) do
             if type(cb.id) == "string" then
                 cb_ids[cb.id] = true
                 if config.show_buttons[cb.id] == nil then
@@ -164,7 +165,7 @@ local function apply_quick_settings()
         end
         -- Remove stale cb_ entries (deleted custom buttons) from button_order
         local clean_order = {}
-        for _, id in ipairs(config.button_order) do
+        for _i, id in ipairs(config.button_order) do
             if id:sub(1, 3) ~= "cb_" or cb_ids[id] then
                 table.insert(clean_order, id)
             end
@@ -172,8 +173,8 @@ local function apply_quick_settings()
         config.button_order = clean_order
         -- Append new custom button IDs not yet in button_order
         local in_order = {}
-        for _, id in ipairs(config.button_order) do in_order[id] = true end
-        for _, cb in ipairs(config.custom_buttons) do
+        for _i, id in ipairs(config.button_order) do in_order[id] = true end
+        for _i, cb in ipairs(config.custom_buttons) do
             if type(cb.id) == "string" and not in_order[cb.id] then
                 table.insert(config.button_order, cb.id)
             end
@@ -188,6 +189,32 @@ local function apply_quick_settings()
     end
 
     loadConfig()
+
+    local function setRotationMode(touch_menu, mode)
+        if touch_menu and touch_menu.closeMenu then
+            touch_menu:closeMenu()
+        end
+        UIManager:broadcastEvent(Event:new("SetRotationMode", mode))
+    end
+
+    local function toggleRotationTarget(target_mode)
+        if Screen:getRotationMode() == target_mode then
+            return Screen.DEVICE_ROTATED_UPRIGHT
+        end
+        return target_mode
+    end
+
+    local function nextCycleRotationMode()
+        local current = Screen:getRotationMode()
+        if current == Screen.DEVICE_ROTATED_CLOCKWISE then
+            return Screen.DEVICE_ROTATED_UPSIDE_DOWN
+        elseif current == Screen.DEVICE_ROTATED_UPSIDE_DOWN then
+            return Screen.DEVICE_ROTATED_COUNTER_CLOCKWISE
+        elseif current == Screen.DEVICE_ROTATED_COUNTER_CLOCKWISE then
+            return Screen.DEVICE_ROTATED_UPRIGHT
+        end
+        return Screen.DEVICE_ROTATED_CLOCKWISE
+    end
 
     -- Returns true if a plugin slot is loaded in the active UI; fails open if no UI yet.
     local function hasPlugin(slot)
@@ -266,8 +293,17 @@ local function apply_quick_settings()
         rotate = {
             icon = "quick_rotate",
             label = _("Rotate"),
-            callback = function()
-                UIManager:broadcastEvent(Event:new("IterateRotation"))
+            callback = function(touch_menu)
+                local action = config.rotate_action
+                if action == "90" then
+                    setRotationMode(touch_menu, toggleRotationTarget(Screen.DEVICE_ROTATED_CLOCKWISE))
+                elseif action == "180" then
+                    setRotationMode(touch_menu, toggleRotationTarget(Screen.DEVICE_ROTATED_UPSIDE_DOWN))
+                elseif action == "270" then
+                    setRotationMode(touch_menu, toggleRotationTarget(Screen.DEVICE_ROTATED_COUNTER_CLOCKWISE))
+                else
+                    setRotationMode(touch_menu, nextCycleRotationMode())
+                end
             end,
         },
         usb = {
@@ -666,7 +702,7 @@ local function apply_quick_settings()
         end
 
         local visible_buttons = {}
-        for _, id in ipairs(config.button_order) do
+        for _i, id in ipairs(config.button_order) do
             if config.show_buttons[id] and button_defs[id] then
                 local def = button_defs[id]
                 if not def.visible_func or def.visible_func() then
@@ -879,14 +915,14 @@ local function apply_quick_settings()
 
         -- Check sliders for taps (not holds)
         if not is_hold then
-            for _, sr in ipairs(refs.sliders or {}) do
+            for _i, sr in ipairs(refs.sliders or {}) do
                 if sr.slider:handleTap(ges) then return true end
             end
         end
 
         -- Check toggles (tap only)
         if not is_hold then
-            for _, tr in ipairs(refs.toggles or {}) do
+            for _i, tr in ipairs(refs.toggles or {}) do
                 if tr.toggle.dimen and ges.pos:intersectWith(tr.toggle.dimen) then
                     tr.callback()
                     return true
@@ -895,7 +931,7 @@ local function apply_quick_settings()
         end
 
         -- Check buttons
-        for _, btn_ref in ipairs(refs.buttons) do
+        for _i, btn_ref in ipairs(refs.buttons) do
             if btn_ref.widget.dimen and ges.pos:intersectWith(btn_ref.widget.dimen) then
                 if is_qs_hold_required() then
                     -- Hold fires the callback; tap is swallowed.
@@ -941,7 +977,7 @@ local function apply_quick_settings()
         -- Pre-set image.dimen on bar icon buttons so widgetInvert doesn't crash
         -- if a tap arrives before the first paint (nil dimen on IconWidget).
         if self.bar and type(self.bar.icon_widgets) == "table" then
-            for _, btn in ipairs(self.bar.icon_widgets) do
+            for _i, btn in ipairs(self.bar.icon_widgets) do
                 if btn and btn.image and not btn.image.dimen then
                     local ok_sz, sz = pcall(function() return btn.image:getSize() end)
                     if ok_sz and sz then
@@ -1118,7 +1154,7 @@ local function apply_quick_settings()
             local refs = tm._qs_refs
             if not refs then return {} end
             local sliders = {}
-            for _, sr in ipairs(refs.sliders or {}) do
+            for _i, sr in ipairs(refs.sliders or {}) do
                 table.insert(sliders, sr.slider)
             end
             return sliders

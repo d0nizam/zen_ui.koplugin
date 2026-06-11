@@ -124,6 +124,7 @@ local defaults = {
         },
         show_frontlight = true,
         show_warmth = true,
+        rotate_action = "cycle",
     },
     status_bar = {
         custom_text = " ",

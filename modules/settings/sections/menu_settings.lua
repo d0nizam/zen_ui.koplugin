@@ -64,7 +64,7 @@ function M.build(ctx)
     -- Remove any button whose plugin/feature is not detected.
     do
         local filtered = {}
-        for _, item in ipairs(quick_button_items) do
+        for _i, item in ipairs(quick_button_items) do
             if not item.detect or item.detect() then
                 filtered[#filtered + 1] = item
             end
@@ -75,15 +75,36 @@ function M.build(ctx)
     table.sort(quick_button_items, function(a, b) return a.text < b.text end)
 
     local quick_button_label_by_id = {}
-    for _, quick_item in ipairs(quick_button_items) do
+    for _i, quick_item in ipairs(quick_button_items) do
         quick_button_label_by_id[quick_item.key] = quick_item.text
     end
 
     local quick_buttons_max = 9
 
+    local rotate_action_options = {
+        { key = "cycle", text = _("Cycle") },
+        { key = "90",    text = _("90°")   },
+        { key = "180",   text = _("180°")  },
+        { key = "270",   text = _("270°")  },
+    }
+
+    local rotate_action_labels = {}
+    for _i, item in ipairs(rotate_action_options) do
+        rotate_action_labels[item.key] = item.text
+    end
+
+    local function getRotateAction()
+        local action = config.quick_settings.rotate_action
+        return rotate_action_labels[action] and action or "cycle"
+    end
+
+    local function getRotateActionLabel()
+        return rotate_action_labels[getRotateAction()]
+    end
+
     -- only count buttons that are actually toggleable in the UI
     local quick_button_key_set = {}
-    for _, item in ipairs(quick_button_items) do
+    for _i, item in ipairs(quick_button_items) do
         quick_button_key_set[item.key] = true
     end
 
@@ -112,6 +133,40 @@ function M.build(ctx)
         return count
     end
 
+    local function buildRotateButtonSubItems()
+        local items = {}
+        table.insert(items, {
+            text = _("Enable"),
+            separator = true,
+            checked_func = function()
+                return config.quick_settings.show_buttons.rotate == true
+            end,
+            enabled_func = function()
+                return config.quick_settings.show_buttons.rotate == true
+                    or countEnabledButtons() < quick_buttons_max
+            end,
+            callback = function()
+                config.quick_settings.show_buttons.rotate = config.quick_settings.show_buttons.rotate ~= true
+                save_and_apply_quick_settings()
+            end,
+        })
+        for _i, item in ipairs(rotate_action_options) do
+            local key = item.key
+            table.insert(items, {
+                text = item.text,
+                radio = true,
+                checked_func = function()
+                    return getRotateAction() == key
+                end,
+                callback = function()
+                    config.quick_settings.rotate_action = key
+                    save_and_apply_quick_settings()
+                end,
+            })
+        end
+        return items
+    end
+
     local quick_button_sub_items = {}
 
     table.insert(quick_button_sub_items, {
@@ -120,7 +175,7 @@ function M.build(ctx)
         callback = function()
             local SortWidget = require("ui/widget/sortwidget")
             local sort_items = {}
-            for _, id in ipairs(config.quick_settings.button_order) do
+            for _i, id in ipairs(config.quick_settings.button_order) do
                 local label = quick_button_label_by_id[id]
                 if label then
                     table.insert(sort_items, {
@@ -137,12 +192,12 @@ function M.build(ctx)
                     -- Replace the table to avoid leaving stale trailing entries
                     local new_order = {}
                     local in_sort = {}
-                    for _, item in ipairs(sort_items) do
+                    for _i, item in ipairs(sort_items) do
                         table.insert(new_order, item.orig_item)
                         in_sort[item.orig_item] = true
                     end
                     -- Preserve any orphaned entries not shown in the sort widget
-                    for _, id in ipairs(config.quick_settings.button_order) do
+                    for _i, id in ipairs(config.quick_settings.button_order) do
                         if not in_sort[id] then
                             table.insert(new_order, id)
                         end
@@ -290,7 +345,7 @@ function M.build(ctx)
                 end
                 config.quick_settings.show_buttons[cb.id] = nil
                 local new_order = {}
-                for _, id in ipairs(config.quick_settings.button_order) do
+                for _i, id in ipairs(config.quick_settings.button_order) do
                     if id ~= cb.id then table.insert(new_order, id) end
                 end
                 config.quick_settings.button_order = new_order
@@ -355,7 +410,7 @@ function M.build(ctx)
                 })
                 -- Existing custom buttons
                 if type(config.quick_settings.custom_buttons) == "table" then
-                    for _, cb in ipairs(config.quick_settings.custom_buttons) do
+                    for _i, cb in ipairs(config.quick_settings.custom_buttons) do
                         local cb_ref = cb
                         table.insert(items, {
                             text_func = function() return get_cb_label(cb_ref) end,
@@ -375,22 +430,32 @@ function M.build(ctx)
         end,
     })
 
-    for _, quick_item in ipairs(quick_button_items) do
+    for _i, quick_item in ipairs(quick_button_items) do
         local key = quick_item.key
-        table.insert(quick_button_sub_items, {
-            text = quick_item.text,
-            checked_func = function()
-                return config.quick_settings.show_buttons[key] == true
-            end,
-            enabled_func = function()
-                return config.quick_settings.show_buttons[key] == true
-                    or countEnabledButtons() < quick_buttons_max
-            end,
-            callback = function()
-                config.quick_settings.show_buttons[key] = config.quick_settings.show_buttons[key] ~= true
-                save_and_apply_quick_settings()
-            end,
-        })
+        if key == "rotate" then
+            table.insert(quick_button_sub_items, {
+                text_func = function()
+                    return T(_("Rotate: %1"), getRotateActionLabel())
+                end,
+                keep_menu_open = true,
+                sub_item_table_func = buildRotateButtonSubItems,
+            })
+        else
+            table.insert(quick_button_sub_items, {
+                text = quick_item.text,
+                checked_func = function()
+                    return config.quick_settings.show_buttons[key] == true
+                end,
+                enabled_func = function()
+                    return config.quick_settings.show_buttons[key] == true
+                        or countEnabledButtons() < quick_buttons_max
+                end,
+                callback = function()
+                    config.quick_settings.show_buttons[key] = config.quick_settings.show_buttons[key] ~= true
+                    save_and_apply_quick_settings()
+                end,
+            })
+        end
     end
 
     return {
