@@ -112,7 +112,7 @@ function M.build(plugin)
     -- Root menu assembly
     -- -------------------------------------------------------------------------
 
-    home_item.text = _("Home page")
+    home_item.text = _("Home")
 
     local root_items = {
         {

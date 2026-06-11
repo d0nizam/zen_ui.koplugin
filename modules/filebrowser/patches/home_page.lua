@@ -1074,7 +1074,7 @@ local function build_home_content(menu, dcfg, rows, data_provider)
         end
     end
     local extra_top_pad = 0
-    if extra_spacing_h > 0 then extra_top_pad = 0 end
+    if extra_spacing_h > 0 then extra_top_pad = math.floor(extra_spacing_h / 2) end
 
     local face_title = Font:getFace("smallinfofont", Screen:scaleBySize(24))
     local face_value = Font:getFace("smallinfofont", Screen:scaleBySize(20))

@@ -288,8 +288,10 @@ function M.build(ctx)
         copy_builtin_for_editing(dcfg.active_preset)
     end
 
-    local function save_home()
-        make_builtin_editable()
+    local function save_home(_mode, opts)
+        if not (type(opts) == "table" and opts.make_builtin_editable == false) then
+            make_builtin_editable()
+        end
         PresetStore.saveSettings("home", dcfg)
         home_rebuild_pending = true
         schedule_home_rebuild_on_menu_close()
@@ -833,18 +835,95 @@ function M.build(ctx)
     local function apply_home_preset(preset, touchmenu_instance)
         local preset_name = preset and preset.name
         HomePresets.applyHomePagePreset(dcfg, preset)
-        if preset and preset.builtin == true then
-            copy_builtin_for_editing(preset_name)
-        else
-            dcfg.active_preset = preset_name
-            PresetStore.setActivePreset("home", preset_name)
-        end
+        dcfg.active_preset = preset_name
+        PresetStore.setActivePreset("home", preset_name)
         ensure_cfg(config)
-        save_home("reinit")
+        save_home("reinit", { make_builtin_editable = false })
         if touchmenu_instance then touchmenu_instance:updateItems() end
     end
 
-    local function build_preset_items()
+    local build_preset_items
+
+    local function refresh_preset_menu(touchmenu_instance)
+        if touchmenu_instance then
+            touchmenu_instance.item_table = build_preset_items()
+            touchmenu_instance:updateItems()
+        end
+    end
+
+    local function show_rename_preset_dialog(preset_name, touchmenu_instance)
+        if type(preset_name) ~= "string" or preset_name == "" then return end
+        local InputDialog = require("ui/widget/inputdialog")
+        local dlg
+        dlg = InputDialog:new{
+            title = _("Preset name"),
+            input = preset_name,
+            input_hint = _("Home page preset"),
+            buttons = {{
+                {
+                    text = _("Cancel"),
+                    id = "close",
+                    callback = function() UIManager:close(dlg) end,
+                },
+                {
+                    text = _("Rename"),
+                    is_enter_default = true,
+                    callback = function()
+                        local name = dlg:getInputText()
+                        if not name or name:match("^%s*$") then return end
+                        name = name:match("^%s*(.-)%s*$")
+                        if name == preset_name then
+                            UIManager:close(dlg)
+                            return
+                        end
+                        if HomePresets.isBuiltinPresetName(name) then
+                            name = unique_user_preset_name(HomePresets.CUSTOM_PRESET_NAME)
+                        elseif PresetStore.find("home", name) then
+                            name = unique_user_preset_name(name)
+                        end
+                        local preset = PresetStore.find("home", preset_name)
+                        if not preset then return end
+                        if type(preset.home_page) == "table" then
+                            preset.home_page.title = name
+                        else
+                            preset.title = name
+                        end
+                        UIManager:close(dlg)
+                        PresetStore.save("home", name, preset)
+                        PresetStore.delete("home", preset_name)
+                        if dcfg.active_preset == preset_name then
+                            dcfg.active_preset = name
+                            dcfg.title = name
+                            PresetStore.setActivePreset("home", name)
+                            save_home("reinit")
+                        end
+                        refresh_preset_menu(touchmenu_instance)
+                    end,
+                },
+            }},
+        }
+        UIManager:show(dlg)
+        dlg:onShowKeyboard()
+    end
+
+    local function show_delete_preset_confirm(preset_name, touchmenu_instance)
+        local ConfirmBox = require("ui/widget/confirmbox")
+        UIManager:show(ConfirmBox:new{
+            text = _("Delete preset?") .. "\n\n" .. (preset_name or ""),
+            ok_text = _("Delete"),
+            ok_callback = function()
+                PresetStore.delete("home", preset_name)
+                if dcfg.active_preset == preset_name then
+                    dcfg.active_preset = nil
+                    PresetStore.setActivePreset("home", nil)
+                end
+                save_home("reinit")
+                refresh_preset_menu(touchmenu_instance)
+            end,
+        })
+    end
+
+    function build_preset_items()
         local all = all_home_presets()
         local items = {}
 
@@ -881,10 +960,7 @@ function M.build(ctx)
                                 dcfg.active_preset = name
                                 PresetStore.setActivePreset("home", name)
                                 save_home("reinit")
-                                if touchmenu_instance then
-                                    touchmenu_instance.item_table = build_preset_items()
-                                    touchmenu_instance:updateItems()
-                                end
+                                refresh_preset_menu(touchmenu_instance)
                             end,
                         },
                     }},
@@ -907,23 +983,27 @@ function M.build(ctx)
                     apply_home_preset(preset, touchmenu_instance)
                 end,
                 hold_callback = not is_builtin and function(touchmenu_instance)
-                    local ConfirmBox = require("ui/widget/confirmbox")
-                    UIManager:show(ConfirmBox:new{
-                        text = _("Delete preset?") .. "\n\n" .. (preset_name or ""),
-                        ok_text = _("Delete"),
-                        ok_callback = function()
-                            PresetStore.delete("home", preset_name)
-                            if dcfg.active_preset == preset_name then
-                                dcfg.active_preset = nil
-                                PresetStore.setActivePreset("home", nil)
-                            end
-                            save_home("reinit")
-                            if touchmenu_instance then
-                                touchmenu_instance.item_table = build_preset_items()
-                                touchmenu_instance:updateItems()
-                            end
-                        end,
-                    })
+                    local ButtonDialog = require("ui/widget/buttondialog")
+                    local dialog
+                    dialog = ButtonDialog:new{
+                        buttons = {
+                            {{
+                                text = _("Rename"),
+                                callback = function()
+                                    UIManager:close(dialog)
+                                    show_rename_preset_dialog(preset_name, touchmenu_instance)
+                                end,
+                            }},
+                            {{
+                                text = _("Delete"),
+                                callback = function()
+                                    UIManager:close(dialog)
+                                    show_delete_preset_confirm(preset_name, touchmenu_instance)
+                                end,
+                            }},
+                        },
+                    }
+                    UIManager:show(dialog)
                 end or nil,
                 separator = i == #all or (is_builtin and all[i + 1] and all[i + 1].builtin ~= true),
             }
@@ -1139,7 +1219,7 @@ function M.build(ctx)
     end
 
     return {
-        text = _("Home page"),
+        text = _("Home"),
         sub_item_table = {
             {
                 text = _("Widgets"),
