@@ -521,31 +521,43 @@ local function apply_navbar()
     }
 
     local function is_tab_enabled(tab_id)
-        if tab_id == "books" then return true end
         if tab_id:sub(1, 3) == "ct_" then
             return config.show_tabs[tab_id] == true
         end
         return config.show_tabs[tab_id] == true
     end
 
+    local function first_enabled_default_tab()
+        local fallback
+        for _i, id in ipairs(config.tab_order) do
+            if tab_callbacks[id] and is_tab_enabled(id) then
+                if default_tab_whitelist[id] or id:sub(1, 3) == "ct_" then
+                    return id
+                end
+                fallback = fallback or id
+            end
+        end
+        return fallback or "books"
+    end
+
     local function resolve_default_tab()
         local tab_id = config.default_tab
         if type(tab_id) ~= "string" or tab_id == "" then
-            return "books"
+            return first_enabled_default_tab()
         end
         if tab_id:sub(1, 3) == "ct_" then
             if tab_callbacks[tab_id] and is_tab_enabled(tab_id) then
                 return tab_id
             end
-            return "books"
+            return first_enabled_default_tab()
         end
         if not default_tab_whitelist[tab_id] then
-            return "books"
+            return first_enabled_default_tab()
         end
         if tab_callbacks[tab_id] and is_tab_enabled(tab_id) then
             return tab_id
         end
-        return "books"
+        return first_enabled_default_tab()
     end
 
     local function open_default_tab()
@@ -797,7 +809,7 @@ local function apply_navbar()
     local function getVisibleTabs()
         local visible = {}
         for _i, id in ipairs(config.tab_order) do
-            if (id == "books" or config.show_tabs[id]) and tabs_by_id[id] then
+            if config.show_tabs[id] and tabs_by_id[id] then
                 table.insert(visible, tabs_by_id[id])
                 if #visible >= navbar_max_tabs then break end
             end

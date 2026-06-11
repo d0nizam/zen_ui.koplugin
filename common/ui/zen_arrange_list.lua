@@ -55,6 +55,12 @@ end
 
 local function hide_button_icon(button)
     if not button then return end
+    if button._zen_arrange_callback == nil then
+        button._zen_arrange_callback = button.callback
+        button._zen_arrange_on_tap = button.onTapSelectButton
+        button._zen_arrange_on_hold = button.onHoldSelectButton
+        button._zen_arrange_on_hold_release = button.onHoldReleaseSelectButton
+    end
     button:disableWithoutDimming()
     button.callback = function() return true end
     button.onTapSelectButton = function() return true end
@@ -64,12 +70,23 @@ local function hide_button_icon(button)
     button:hide()
 end
 
+local function restore_button_icon(button)
+    if not button then return end
+    if button._zen_arrange_callback ~= nil then
+        button.callback = button._zen_arrange_callback
+        button.onTapSelectButton = button._zen_arrange_on_tap
+        button.onHoldSelectButton = button._zen_arrange_on_hold
+        button.onHoldReleaseSelectButton = button._zen_arrange_on_hold_release
+    end
+    button:show()
+end
+
 local function suppress_footer_jump_buttons(sort_widget)
     if not sort_widget then return end
     local moving = sort_widget.marked and sort_widget.marked > 0
     if moving then
-        if sort_widget.footer_first_up then sort_widget.footer_first_up:show() end
-        if sort_widget.footer_last_down then sort_widget.footer_last_down:show() end
+        restore_button_icon(sort_widget.footer_first_up)
+        restore_button_icon(sort_widget.footer_last_down)
         return
     end
 

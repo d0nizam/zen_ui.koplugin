@@ -86,15 +86,14 @@ function M.build(plugin)
     })
 
     utils.reorder_nested_items_by_text({ navbar_item }, _("Navbar"), {
-        _("Tabs"),
+        _("Tab settings"),
         _("Styling"),
         _("Show labels"),
     })
 
-    utils.reorder_nested_items_by_text({ navbar_item }, _("Tabs"), {
-        _("Visibility"),
+    utils.reorder_nested_items_by_text({ navbar_item }, _("Tab settings"), {
+        _("Tabs") .. " \u{25B8}",
         _("Custom tabs"),
-        _("Arrange tabs"),
     })
 
     utils.reorder_nested_items_by_text({ navbar_item }, _("Styling"), {
