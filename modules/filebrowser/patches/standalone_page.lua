@@ -73,6 +73,15 @@ function M.enable_filemanager_dispatch(menu)
     end
 end
 
+function M.prevent_swipe_close(menu)
+    if not menu or menu._zen_prevent_swipe_close then return end
+    menu._zen_prevent_swipe_close = true
+
+    menu.onMultiSwipe = function()
+        return true
+    end
+end
+
 function M.create_menu(opts)
     opts = opts or {}
 
@@ -117,6 +126,7 @@ function M.create_menu(opts)
     if opts.filemanager_dispatch ~= false then
         M.enable_filemanager_dispatch(menu_or_err)
     end
+    M.prevent_swipe_close(menu_or_err)
 
     return menu_or_err
 end

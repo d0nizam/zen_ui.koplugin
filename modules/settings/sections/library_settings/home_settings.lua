@@ -762,40 +762,22 @@ function M.build(ctx)
         }
     end
 
-    local function build_widgets_items()
-        local items = {}
-
-        for _i, comp in ipairs(Registry.list()) do
-            local cid = comp.id
-            items[#items + 1] = {
-                text = comp.label,
-                checked_func = function()
-                    return dcfg.rows.enabled[cid] == true
-                end,
-                enabled_func = function()
-                    return dcfg.rows.enabled[cid] == true
-                        or enabled_count(dcfg.rows.enabled) < home_max_widgets
-                end,
-                callback = function()
-                    if dcfg.rows.enabled[cid] == true then
-                        if enabled_count(dcfg.rows.enabled) <= 1 then return end
-                        dcfg.rows.enabled[cid] = false
-                    else
-                        if enabled_count(dcfg.rows.enabled) >= home_max_widgets then
-                            local InfoMessage = require("ui/widget/infomessage")
-                            UIManager:show(InfoMessage:new{
-                                text = _("Maximum 5 widgets allowed"),
-                            })
-                            return
-                        end
-                        dcfg.rows.enabled[cid] = true
-                    end
-                    save_home("reinit")
-                end,
-            }
+    local function toggle_widget_enabled(cid)
+        if dcfg.rows.enabled[cid] == true then
+            if enabled_count(dcfg.rows.enabled) <= 1 then return false end
+            dcfg.rows.enabled[cid] = false
+        else
+            if enabled_count(dcfg.rows.enabled) >= home_max_widgets then
+                local InfoMessage = require("ui/widget/infomessage")
+                UIManager:show(InfoMessage:new{
+                    text = _("Maximum 5 widgets allowed"),
+                })
+                return false
+            end
+            dcfg.rows.enabled[cid] = true
         end
-
-        return items
+        save_home("reinit")
+        return true
     end
 
     local function arrange_widgets()
@@ -807,10 +789,18 @@ function M.build(ctx)
                 text = component_label(id),
                 orig_item = id,
                 dim = dcfg.rows.enabled[id] ~= true,
+                checked_func = function()
+                    return dcfg.rows.enabled[id] == true
+                end,
+                callback = function(item)
+                    if toggle_widget_enabled(id) then
+                        item.dim = dcfg.rows.enabled[id] ~= true
+                    end
+                end,
             }
         end
-        UIManager:show(SortWidget:new{
-            title = _("Arrange widgets"),
+        local sort_widget = SortWidget:new{
+            title = _("Widgets"),
             item_table = sort_items,
             callback = function()
                 local new_order = {}
@@ -820,7 +810,35 @@ function M.build(ctx)
                 dcfg.rows.order = new_order
                 save_home("reinit")
             end,
-        })
+        }
+        local function hide_disabled_footer_cancel()
+            local button = sort_widget.footer_cancel
+            if not button then return end
+            button:disableWithoutDimming()
+            button.callback = function() return true end
+            button.onTapSelectButton = function() return true end
+            button.onHoldSelectButton = function() return true end
+            button:hide()
+        end
+        local title_bar = sort_widget.title_bar
+        if title_bar and title_bar.left_button then
+            local button = title_bar.left_button
+            button:setIcon("zen_ui")
+            button.allow_flash = false
+            button.callback = function() return true end
+            button.hold_callback = false
+            button.onTapIconButton = function() return true end
+            button.onHoldIconButton = function() return true end
+            button.onHoldReleaseIconButton = function() return true end
+        end
+        hide_disabled_footer_cancel()
+        local orig_populate = sort_widget._populateItems
+        sort_widget._populateItems = function(self, ...)
+            local result = orig_populate(self, ...)
+            hide_disabled_footer_cancel()
+            return result
+        end
+        UIManager:show(sort_widget)
     end
 
     local function all_home_presets()
@@ -1223,10 +1241,6 @@ function M.build(ctx)
         sub_item_table = {
             {
                 text = _("Widgets"),
-                sub_item_table = build_widgets_items(),
-            },
-            {
-                text = _("Arrange widgets"),
                 keep_menu_open = true,
                 callback = arrange_widgets,
             },

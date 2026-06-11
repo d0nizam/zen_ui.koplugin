@@ -1052,6 +1052,15 @@ local function apply_navbar()
         return false
     end
 
+    local function preventStandaloneSwipeClose(menu)
+        if not menu or menu._zen_prevent_swipe_close then return end
+        menu._zen_prevent_swipe_close = true
+
+        menu.onMultiSwipe = function()
+            return true
+        end
+    end
+
     -- Flag to skip navbar for nested views (e.g. collection opened from collections list)
     -- or selection-mode dialogs (e.g. "add to collection")
     local _skip_standalone_navbar = false
@@ -1078,6 +1087,9 @@ local function apply_navbar()
             end
         end
         orig_menu_init(self)
+        if not _skip_standalone_navbar and isStandaloneNavbarView(self) then
+            preventStandaloneSwipeClose(self)
+        end
         -- Plugin views (e.g. Rakuyomi) can't be hooked via show functions,
         -- so inject navbar via nextTick from here. Hide-pagination doesn't
         -- apply to these views so there's no ordering conflict.
@@ -1476,10 +1488,11 @@ local function apply_navbar()
     -- === Inject navbar into standalone views (History, Favorites, Collections) ===
 
     injectStandaloneNavbar = function(menu, view_tab_id)
+        if not menu or not menu[1] then return end
+        preventStandaloneSwipeClose(menu)
         if not is_navbar_enabled() then
             return
         end
-        if not menu or not menu[1] then return end
 
         -- Suppress the invisible page-info tap target ("go to letter/page" dialog)
         if menu.page_info_text then
