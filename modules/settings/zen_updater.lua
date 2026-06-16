@@ -1228,7 +1228,7 @@ local function validate_plugin_tree(root)
     local required = {
         "_meta.lua",
         "main.lua",
-        "common/zen_screen.lua",
+        "common/ui/zen_screen.lua",
         "modules/settings/zen_updater.lua",
     }
     for _i, rel in ipairs(required) do
