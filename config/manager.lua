@@ -608,8 +608,9 @@ function M.load()
     if migrated_file_config then
         local g = rawget(_G, "G_reader_settings")
         if g and type(g.delSetting) == "function" then
-            pcall(g.delSetting, g, LEGACY_KEY)
-            pcall(g.flush, g)
+            -- TODO: re-enable to delete legacy zen_ui_config key from settings.reader.lua
+            -- pcall(g.delSetting, g, LEGACY_KEY)
+            -- pcall(g.flush, g)
         end
     end
     _current_config = cfg
