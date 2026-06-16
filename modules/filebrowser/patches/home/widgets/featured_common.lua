@@ -16,6 +16,7 @@ local Font = require("ui/font")
 local util = require("util")
 local zen_utils = require("common/utils")
 local cover_common = require("modules/filebrowser/patches/home/widgets/cover_common")
+local library_font = require("modules/filebrowser/patches/library_font")
 local logger = require("logger")
 local _ = require("gettext")
 
@@ -162,7 +163,7 @@ function M.build(ctx, source_key)
     local text_w = math.max(1, width - cover_col_w - gap)
 
     -- Fonts
-    local scale = clamp(col_h / 300, 0.55, 1.28)
+    local scale = clamp(col_h / 300, 0.55, 1.28) * library_font.getScale(18)
     local title_face = Font:getFace("smallinfofont", Screen:scaleBySize(math.floor(11 * scale + 0.5)))
     local meta_face = Font:getFace("smallinfofont", Screen:scaleBySize(math.floor(9 * scale + 0.5)))
     local desc_face = Font:getFace("smallinfofont", Screen:scaleBySize(math.floor(7 * scale + 0.5)))

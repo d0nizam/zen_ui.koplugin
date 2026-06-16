@@ -12,6 +12,7 @@ local GestureRange = require("ui/gesturerange")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
 local cover_common = require("modules/filebrowser/patches/home/widgets/cover_common")
+local library_font = require("modules/filebrowser/patches/library_font")
 local Font = require("ui/font")
 local Device = require("device")
 local utils = require("common/utils")
@@ -343,7 +344,7 @@ function M.build_strip(ctx, source_key)
     local row_top_pad = math.max(4, Screen:scaleBySize(4))
     local row_bottom_pad = math.max(4, Screen:scaleBySize(4))
     local row_inner_bottom_pad = two_rows and math.max(2, Screen:scaleBySize(4)) or 0
-    local strip_title_face = Font:getFace("smallinfofont", Screen:scaleBySize(10))
+    local strip_title_face = Font:getFace("smallinfofont", library_font.scaleValue(Screen:scaleBySize(10), 18))
     -- Measure the real rendered single-line height: TextBoxWidget renders at
     -- round((1+line_height)*face.size) and bumps a too-small height up to that,
     -- so a guessed title_h underreserves and the title overflows into the navbar.

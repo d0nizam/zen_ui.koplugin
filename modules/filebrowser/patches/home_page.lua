@@ -137,7 +137,12 @@ local function ensure_strip_module_cfg(dcfg, module_id)
         if mcfg.count < 3 then mcfg.count = 3 end
         if mcfg.count > 5 then mcfg.count = 5 end
     end
-    if mcfg.show_strip_titles == nil then mcfg.show_strip_titles = false end
+    if mcfg.show_strip_titles == nil then
+        local cfg = ConfigManager.get()
+        mcfg.show_strip_titles = type(cfg) == "table"
+            and type(cfg.mosaic_title_strip) == "table"
+            and cfg.mosaic_title_strip.show_title == true
+    end
     return mcfg
 end
 
