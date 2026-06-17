@@ -463,7 +463,7 @@ function M.build_strip(ctx, source_key)
                         face = strip_title_face,
                         bold = true,
                         alignment = "center",
-                        fgcolor = Blitbuffer.COLOR_GRAY_3,
+                        fgcolor = Blitbuffer.COLOR_BLACK,
                         height_overflow_show_ellipsis = true,
                     },
                 }

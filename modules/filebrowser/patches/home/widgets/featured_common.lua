@@ -167,19 +167,7 @@ function M.build(ctx, source_key)
     local title_face = Font:getFace("smallinfofont", Screen:scaleBySize(math.floor(11 * scale + 0.5)))
     local meta_face = Font:getFace("smallinfofont", Screen:scaleBySize(math.floor(9 * scale + 0.5)))
     local stats_face = Font:getFace("smallinfofont", Screen:scaleBySize(math.floor(6.5 * scale + 0.5)))
-    -- Match the "Details" TextViewer (text_type = "book_info") description font so the
-    -- home featured description renders at the same size. Don't apply the cover-size
-    -- `scale` shrink here: keep a fixed size even when the description is long.
-    local desc_font_size = 20
-    local g_settings = rawget(_G, "G_reader_settings")
-    if g_settings then
-        local tt = g_settings:readSetting("textviewer_text_types")
-        local bi = tt and tt.book_info
-        if bi and tonumber(bi.font_size) then
-            desc_font_size = tonumber(bi.font_size)
-        end
-    end
-    local desc_face = Font:getFace("x_smallinfofont", desc_font_size)
+    local desc_face = library_font.getFace(library_font.scaleValue(16))
 
     -- Optional status bar (top of right column)
     local status_widget = show_status_bar and ctx.buildStatusRow(text_w, {
@@ -204,8 +192,8 @@ function M.build(ctx, source_key)
     local progress_row
     if bar_h > 0 then
         if has_progress_text then
-            local lw = TextWidget:new{ text = left_progress_text, face = stats_face, fgcolor = Blitbuffer.COLOR_GRAY_3 }
-            local rw = TextWidget:new{ text = right_progress_text, face = stats_face, fgcolor = Blitbuffer.COLOR_GRAY_3 }
+            local lw = TextWidget:new{ text = left_progress_text, face = stats_face, fgcolor = Blitbuffer.COLOR_BLACK }
+            local rw = TextWidget:new{ text = right_progress_text, face = stats_face, fgcolor = Blitbuffer.COLOR_BLACK }
             local tgap = math.max(4, math.floor(text_w * 0.02))
             local bar_w = math.max(20, text_w - lw:getSize().w - rw:getSize().w - tgap * 2)
             progress_row = HorizontalGroup:new{
@@ -291,7 +279,7 @@ function M.build(ctx, source_key)
             height = author_h,
             face = meta_face,
             line_height = 0,
-            fgcolor = Blitbuffer.COLOR_GRAY_3,
+            fgcolor = Blitbuffer.COLOR_BLACK,
             height_overflow_show_ellipsis = true,
         })
     end
@@ -332,7 +320,7 @@ function M.build(ctx, source_key)
             width = text_w,
             height = desc_h,
             face = desc_face,
-            fgcolor = Blitbuffer.COLOR_GRAY_3,
+            fgcolor = Blitbuffer.COLOR_BLACK,
             height_overflow_show_ellipsis = true,
         }
         local actual_desc_h = desc_widget:getSize().h

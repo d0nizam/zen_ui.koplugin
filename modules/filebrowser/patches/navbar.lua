@@ -266,8 +266,13 @@ local function apply_navbar()
     local hookQuickRSSInit
     local getNavbarHeight
 
+    local function syncActiveTabLabel()
+        _G.__ZEN_UI_ACTIVE_TAB_LABEL = tabs_by_id[active_tab] and tabs_by_id[active_tab].label or active_tab
+    end
+
     local function setActiveTab(id)
         active_tab = id
+        syncActiveTabLabel()
         _navbar_focused_idx = nil
         local fm = FileManager.instance
         if fm then
@@ -572,6 +577,7 @@ local function apply_navbar()
     end
 
     active_tab = resolve_default_tab()
+    syncActiveTabLabel()
 
     -- Custom tabs are synced dynamically in createNavBar() so they appear immediately
     -- after being added without needing a full patch re-apply.
@@ -999,6 +1005,7 @@ local function apply_navbar()
                 or tapped_id:sub(1, 3) == "ct_"
             if track_tab and tapped_id ~= active_tab then
                 active_tab = tapped_id
+                syncActiveTabLabel()
                 -- Only repaint the FM navbar for tabs that render inside it (not overlay views)
                 local stays_in_browser = tapped_id == "books"
                     or (tapped_id == "manga" and config.manga_action == "folder" and config.manga_folder ~= "")
@@ -1157,6 +1164,7 @@ local function apply_navbar()
 
         if new_tab and new_tab ~= active_tab then
             active_tab = new_tab
+            syncActiveTabLabel()
             injectNavbar(self)
             UIManager:setDirty(self, "full")
         end
@@ -1276,6 +1284,7 @@ local function apply_navbar()
                 or tid == "collections"
             if track and tid ~= active_tab then
                 active_tab = tid
+                syncActiveTabLabel()
                 local stays = tid == "books"
                     or (tid == "manga" and config.manga_action == "folder" and config.manga_folder ~= "")
                     or (tid == "news"  and config.news_action  == "folder" and config.news_folder  ~= "")
@@ -1505,6 +1514,7 @@ local function apply_navbar()
 
     injectStandaloneNavbar = function(menu, view_tab_id)
         if not menu or not menu[1] then return end
+        _G.__ZEN_UI_ACTIVE_TAB_LABEL = tabs_by_id[view_tab_id] and tabs_by_id[view_tab_id].label or view_tab_id
         preventStandaloneSwipeClose(menu)
         if not is_navbar_enabled() then
             return
@@ -2037,6 +2047,7 @@ local function apply_navbar()
         -- onPathChanged inside orig_setupLayout may have reset active_tab to "books";
         -- restore it now so onShowingReader saves the right tab on the next book open.
         active_tab = state.tab
+        syncActiveTabLabel()
         -- Open group/standalone view synchronously (stack: [fm, group_menu])
         tab_callbacks[state.tab]()
         -- If a detail view was open, open it synchronously too (stack: [fm, group_menu, detail_menu]).

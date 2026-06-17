@@ -21,6 +21,7 @@ local Screen           = require("device").screen
 local util             = require("util")
 local _                = require("gettext")
 local icons            = require("common/inline_icon_map")
+local zen_utils        = require("common/utils")
 
 local M = {}
 
@@ -57,6 +58,26 @@ function CountdownBar:init()
             },
         },
     }
+end
+
+local function safe_filename_part(text)
+    if type(text) ~= "string" then return nil end
+    text = text:gsub("^%s+", ""):gsub("%s+$", "")
+    if text == "" then return nil end
+    text = text:gsub("[/\\:*?\"<>|]", "_"):gsub("%s+", "_")
+    text = text:gsub("_+", "_"):gsub("^_+", ""):gsub("_+$", "")
+    text = text:gsub("%%", "%%%%")
+    if text == "" then return nil end
+    return zen_utils.truncateUtf8Bytes(text, 80)
+end
+
+local function get_screenshot_context_name()
+    local ok_r, RU = pcall(require, "apps/reader/readerui")
+    local reader = ok_r and RU.instance
+    local props = reader and reader.doc_props
+    local title = props and props.title
+    if title and title ~= "" then return title end
+    return rawget(_G, "__ZEN_UI_ACTIVE_TAB_LABEL")
 end
 
 local function show_save_dialog(screenshot_name)
@@ -148,7 +169,10 @@ function M.run()
         UIManager:scheduleIn(0.05, function()
             local screenshot_dir = DataStorage:getFullDataDir() .. "/screenshots"
             util.makePath(screenshot_dir)
-            local name = os.date(screenshot_dir .. "/Screenshot_%Y-%m-%d_%H%M%S.png")
+            local prefix = safe_filename_part(get_screenshot_context_name())
+            local pattern = prefix and (screenshot_dir .. "/" .. prefix .. "_Screenshot_%Y-%m-%d_%H%M%S.png")
+                or (screenshot_dir .. "/Screenshot_%Y-%m-%d_%H%M%S.png")
+            local name = os.date(pattern)
             Screen:shot(name)
             show_save_dialog(name)
         end)
