@@ -332,11 +332,11 @@ function ZenSlider.installTouchMenuHooks(TouchMenu, opts)
             -- A pan arrived while the input lock is active (e.g. the same
             -- gesture that opened the menu). Mark it so the release is also
             -- consumed once the lock expires.
-            self._qs_opening_pan = true
+            self._zen_panel_opening_pan = true
             return
         end
-        self._qs_opening_pan = false  -- clear stale flag once unlocked
-        for _, sl in ipairs(get_sl(self)) do
+        self._zen_panel_opening_pan = false  -- clear stale flag once unlocked
+        for _i, sl in ipairs(get_sl(self)) do
             if sl:handlePan(ges_ev) then return true end
         end
     end
@@ -344,12 +344,12 @@ function ZenSlider.installTouchMenuHooks(TouchMenu, opts)
     function TouchMenu:onPanReleaseCloseAllMenus(arg, ges_ev)
         if not in_panel(self) then return end
         -- Consume the release of the opening gesture whether the lock is still
-        -- active or just expired (tracked via _qs_opening_pan).
-        if is_locked(self) or self._qs_opening_pan then
-            self._qs_opening_pan = false
+        -- active or just expired (tracked via _zen_panel_opening_pan).
+        if is_locked(self) or self._zen_panel_opening_pan then
+            self._zen_panel_opening_pan = false
             return
         end
-        for _, sl in ipairs(get_sl(self)) do
+        for _i, sl in ipairs(get_sl(self)) do
             if sl:handlePanRelease(ges_ev, self.show_parent, self.dimen) then return true end
         end
     end
@@ -358,7 +358,7 @@ function ZenSlider.installTouchMenuHooks(TouchMenu, opts)
     function TouchMenu:onSwipe(arg, ges_ev)
         if in_panel(self) then
             if not is_locked(self) then
-                for _, sl in ipairs(get_sl(self)) do
+                for _i, sl in ipairs(get_sl(self)) do
                     if sl:handleSwipe(ges_ev, self.show_parent, self.dimen) then return true end
                 end
                 -- swipe_fb calls handlePanelGesture which can invoke handleTap;
@@ -374,7 +374,7 @@ function ZenSlider.installTouchMenuHooks(TouchMenu, opts)
     local orig_onMultiSwipe = TouchMenu.onMultiSwipe
     function TouchMenu:onMultiSwipe(arg, ges_ev)
         if in_panel(self) then
-            for _, sl in ipairs(get_sl(self)) do
+            for _i, sl in ipairs(get_sl(self)) do
                 if sl:handleMultiSwipe(ges_ev, self.show_parent, self.dimen) then return true end
             end
             if mswipe_fb then mswipe_fb(self, ges_ev) end

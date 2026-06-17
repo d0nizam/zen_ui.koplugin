@@ -1,6 +1,6 @@
 -- common/zen_icon_picker.lua
--- Horizontally-paginating icon grid picker dialog.
--- Swipe west/east to change pages; pill bar mirrors zen_scroll_bar style.
+-- Full-screen horizontally-paginating icon grid picker.
+-- Swipe west/east to change pages; footer mirrors the shared pages scrollbar.
 --
 -- Usage:
 --   local showIconPickerDialog = require("common/ui/zen_icon_picker")
@@ -21,20 +21,18 @@ local function showIconPickerDialog(icons_list, current_icon, on_select)
     local FC         = require("ui/widget/container/framecontainer")
     local VG         = require("ui/widget/verticalgroup")
     local HG         = require("ui/widget/horizontalgroup")
-    local VS         = require("ui/widget/verticalspan")
     local IW         = require("ui/widget/iconwidget")
     local TW         = require("ui/widget/textwidget")
     local pager      = require("common/ui/zen_pager")
 
     local sw, sh   = Screen:getWidth(), Screen:getHeight()
-    local icon_sz  = Screen:scaleBySize(48)
+    local icon_sz  = Screen:scaleBySize(42)
     local label_h  = Screen:scaleBySize(18)
-    local cell_pad = Screen:scaleBySize(6)
+    local cell_pad = Screen:scaleBySize(4)
     local pad      = Size.padding.default
-    local brd      = Size.border.window
     local span     = Size.span.vertical_default
 
-    -- Always reserve the tallest bar style height so the frame never resizes on style changes.
+    -- Always reserve the tallest bar style height so the layout never resizes on style changes.
     local bar_area_h = pager.PN_FOOTER_H
 
     -- Close button.
@@ -42,12 +40,8 @@ local function showIconPickerDialog(icons_list, current_icon, on_select)
     local close_gap = Screen:scaleBySize(6)
     local close_iw  = IW:new{ icon = "close", width = close_sz, height = close_sz }
 
-    -- frame_w is the outer frame width (border included).
-    -- content_w is the actual drawable area inside (after border + padding).
-    -- All cell/bar sizing uses content_w to prevent overflow.
-    local frame_w   = math.floor(sw * 0.90)
-    local content_w = frame_w - 2*pad - 2*brd
-    local cols      = math.max(3, math.floor(content_w / Screen:scaleBySize(96)))
+    local content_w = sw - 2 * pad
+    local cols      = math.max(4, math.floor(content_w / Screen:scaleBySize(78)))
     local cell_w    = math.floor(content_w / cols)
     local cell_h    = icon_sz + label_h + cell_pad * 2
 
@@ -62,8 +56,8 @@ local function showIconPickerDialog(icons_list, current_icon, on_select)
     local title_h      = math.max(close_sz, title_text_h)
 
     -- Fit as many rows as possible within the available vertical space.
-    local overhead      = 2*pad + 2*brd + title_h + span + span + bar_area_h
-    local max_grid_h    = math.max(cell_h, sh - overhead - Screen:scaleBySize(40))
+    local overhead      = 2 * pad + title_h + span + span + bar_area_h
+    local max_grid_h    = math.max(cell_h, sh - overhead)
     local rows_per_page = math.max(1, math.floor(max_grid_h / cell_h))
     local grid_h        = rows_per_page * cell_h
     local per_page      = cols * rows_per_page
@@ -115,31 +109,14 @@ local function showIconPickerDialog(icons_list, current_icon, on_select)
         page_vgs[p] = pv
     end
 
-    -- Frame geometry: frame_w already set; derive height and positions.
-    local frame_h = 2*pad + 2*brd + title_h + span + grid_h + span + bar_area_h
-    local frame_x = math.floor((sw - frame_w) / 2)
-    local frame_y = math.floor((sh - frame_h) / 2)
-    if frame_y < 0 then frame_y = 0 end
-
-    local content_x = frame_x + brd + pad
-    local content_y = frame_y + brd + pad
+    local content_x = pad
+    local content_y = pad
     local grid_x    = content_x
     local grid_y    = content_y + title_h + span
     local bar_y     = grid_y + grid_h + span
 
-    -- Frame widget: renders border + background only.
-    -- All inner content (title, close icon, grid, bar) is overprinted in paintTo.
-    local inner_frame = FC:new{
-        width      = frame_w,
-        height     = frame_h,
-        background = Blitbuffer.COLOR_WHITE,
-        bordersize = brd,
-        padding    = pad,
-        VS:new{ height = 0 },
-    }
-
     local function paintBar(bb)
-        pager.paint(bb, content_x, bar_y, content_w, bar_area_h, cur_page, total_pages)
+        pager.paint(bb, content_x, bar_y, content_w, bar_area_h, cur_page, total_pages, "page_number")
     end
 
     -- forward ref so gesture handlers can close the dialog before it's assigned.
@@ -159,6 +136,70 @@ local function showIconPickerDialog(icons_list, current_icon, on_select)
         UIManager:setDirty(dialog, function() return "ui", dialog.dimen end)
     end
 
+    local function canUsePageNumber()
+        return total_pages > 1
+    end
+
+    local function inPageNumberBar(gx, gy)
+        return canUsePageNumber()
+            and gy >= bar_y and gy < bar_y + bar_area_h
+            and gx >= content_x and gx < content_x + content_w
+    end
+
+    local function pageNumberZone(gx)
+        if gx < content_x + pager.CHEV_W then return "left" end
+        if gx >= content_x + content_w - pager.CHEV_W then return "right" end
+        return "center"
+    end
+
+    local function showGoToPage()
+        local createZenDialog = require("common/ui/zen_dialog")
+        local input_dialog = createZenDialog{
+            title           = _("Go to page"),
+            input           = "",
+            input_type      = "number",
+            input_hint      = "1 - " .. tostring(total_pages),
+            button_text     = "\u{F124} " .. _("Go"),
+            button_callback = function(input_dialog)
+                local page = tonumber(input_dialog:getInputText())
+                if page and page >= 1 and page <= total_pages then
+                    UIManager:close(input_dialog)
+                    goToPage(math.floor(page))
+                end
+            end,
+        }
+        UIManager:show(input_dialog)
+        input_dialog:onShowKeyboard()
+    end
+
+    local function handlePageNumberTap(gx, gy)
+        if not inPageNumberBar(gx, gy) then return false end
+        local zone = pageNumberZone(gx)
+        if zone == "left" then
+            goToPage(cur_page > 1 and cur_page - 1 or total_pages)
+        elseif zone == "right" then
+            goToPage(cur_page < total_pages and cur_page + 1 or 1)
+        else
+            showGoToPage()
+        end
+        return true
+    end
+
+    local function handlePageNumberHold(gx, gy)
+        if not inPageNumberBar(gx, gy) then return false end
+        local zone = pageNumberZone(gx)
+        if zone == "left" then
+            local skip = pager.getHoldSkip()
+            goToPage(skip == "ends" and 1 or math.max(1, cur_page - (tonumber(skip) or 10)))
+            return true
+        elseif zone == "right" then
+            local skip = pager.getHoldSkip()
+            goToPage(skip == "ends" and total_pages or math.min(total_pages, cur_page + (tonumber(skip) or 10)))
+            return true
+        end
+        return false
+    end
+
     local PickerDlg = IC:extend{}
 
     function PickerDlg:init()
@@ -170,11 +211,6 @@ local function showIconPickerDialog(icons_list, current_icon, on_select)
                 ges         = "tap",
                 screen_zone = { ratio_x = 0, ratio_y = 0, ratio_w = 1, ratio_h = 1 },
                 handler     = function(ges)
-                    local fd = inner_frame.dimen
-                    if not fd or not ges.pos:intersectWith(fd) then
-                        closeDialog()
-                        return true
-                    end
                     local gx, gy = ges.pos.x, ges.pos.y
                     -- Close button (top-left of content area).
                     if gx >= content_x and gx < content_x + close_sz
@@ -182,13 +218,7 @@ local function showIconPickerDialog(icons_list, current_icon, on_select)
                         closeDialog()
                         return true
                     end
-                    -- Page-number chevron taps.
-                    if gy >= bar_y and gy < bar_y + bar_area_h and pager.getStyle() == "page_number" then
-                        if gx < content_x + pager.CHEV_W then
-                            goToPage(cur_page - 1)
-                        elseif gx > content_x + content_w - pager.CHEV_W then
-                            goToPage(cur_page + 1)
-                        end
+                    if handlePageNumberTap(gx, gy) then
                         return true
                     end
                     -- Grid cells.
@@ -217,6 +247,17 @@ local function showIconPickerDialog(icons_list, current_icon, on_select)
                 end,
             },
             {
+                id          = "picker_page_number_hold",
+                ges         = "hold",
+                screen_zone = { ratio_x = 0, ratio_y = 0, ratio_w = 1, ratio_h = 1 },
+                handler     = function(ges)
+                    if handlePageNumberHold(ges.pos.x, ges.pos.y) then
+                        return true
+                    end
+                    return false
+                end,
+            },
+            {
                 id          = "picker_swipe",
                 ges         = "swipe",
                 screen_zone = { ratio_x = 0, ratio_y = 0, ratio_w = 1, ratio_h = 1 },
@@ -238,9 +279,7 @@ local function showIconPickerDialog(icons_list, current_icon, on_select)
     function PickerDlg:paintTo(bb, x, y)
         self.dimen.x = x
         self.dimen.y = y
-        -- Ensure inner_frame.dimen has correct size for tap intersection checks.
-        inner_frame.dimen = Geom:new{ x = frame_x, y = frame_y, w = frame_w, h = frame_h }
-        inner_frame:paintTo(bb, frame_x, frame_y)
+        bb:paintRect(0, 0, sw, sh, Blitbuffer.COLOR_WHITE)
         -- Close icon (vertically centred in title row).
         close_iw:paintTo(bb, content_x, content_y + math.floor((title_h - close_sz) / 2))
         -- Title text (offset right of close icon, vertically centred).

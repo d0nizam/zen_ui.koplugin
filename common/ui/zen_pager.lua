@@ -107,9 +107,9 @@ end
 --   cur_page,
 --   total_pages : pagination state
 -- No-ops silently when total_pages <= 1.
-function M.paint(bb, x, y, w, h, cur_page, total_pages)
+function M.paint(bb, x, y, w, h, cur_page, total_pages, force_style)
     if total_pages <= 1 then return end
-    local style = M.getStyle()
+    local style = force_style or M.getStyle()
 
     if style == "dots" and total_pages <= 75 then
         local diam = M.DOT_DIAM

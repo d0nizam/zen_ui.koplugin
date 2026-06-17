@@ -119,16 +119,6 @@ function M.build(plugin)
     home_item.text = _("Home")
 
     local root_items = {
-        {
-            text = _("Zen Mode"),
-            checked_func = function()
-                return config.features["zen_mode"] == true
-            end,
-            callback = function()
-                config.features["zen_mode"] = config.features["zen_mode"] ~= true
-                save_and_apply("zen_mode")
-            end,
-        },
         quick_settings_item,
         app_launcher_item,
         { text = _("Library"),  sub_item_table = filebrowser_items },

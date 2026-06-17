@@ -26,6 +26,7 @@ local function apply_app_launcher()
     if not zen_plugin or type(zen_plugin.config) ~= "table" then
         return
     end
+    require("modules/menu/patches/touch_menu_panel").install(zen_plugin)
 
     local Screen = Device.screen
     local _icons_dir
@@ -38,6 +39,9 @@ local function apply_app_launcher()
         local features = zen_plugin.config and zen_plugin.config.features
         return type(features) == "table" and features.app_launcher == true
     end
+
+    local DEFAULT_ENTRY_ICON = "lightning"
+    local DEFAULT_FOLDER_ICON = "folder_open"
 
     local function icon_spec(name)
         local icon_name = (type(name) == "string" and name ~= "") and name or "app_launcher"
@@ -132,7 +136,7 @@ local function apply_app_launcher()
         local cfg = Model.ensure(zen_plugin.config)
         local folder_id = touch_menu._app_launcher_folder_id
         if folder_id then
-            local _list, _index, folder = Model.find_by_id(cfg.entries, folder_id)
+            local folder = select(3, Model.find_by_id(cfg.entries, folder_id))
             if folder and folder.type == "folder" then
                 return folder.children or {}, folder
             end
@@ -150,11 +154,13 @@ local function apply_app_launcher()
         if not entry then return end
         if entry._app_back then
             touch_menu._app_launcher_folder_id = nil
+            touch_menu._app_launcher_page = 1
             touch_menu:updateItems(1)
             return
         end
         if entry.type == "folder" then
             touch_menu._app_launcher_folder_id = entry.id
+            touch_menu._app_launcher_page = 1
             touch_menu:updateItems(1)
             return
         end
@@ -216,8 +222,39 @@ local function apply_app_launcher()
             visible[#visible + 1] = entry
         end
 
+        -- Pagination: slice the grid so it never overflows the space a normal
+        -- menu would use (bar + items area + footer). The footer up arrow then
+        -- always stays on screen, matching KOReader's stock menu height.
+        local cell_total_h = cell_h + Screen:scaleBySize(4)
+        local screen_h = (touch_menu.screen_size and touch_menu.screen_size.h) or Screen:getHeight()
+        local menu_height = touch_menu.height
+            and math.min(touch_menu.height, screen_h)
+            or screen_h
+        local bar_h = (touch_menu.bar and touch_menu.bar:getSize().h) or 0
+        local footer_h = (touch_menu.footer and touch_menu.footer:getSize().h) or 0
+        local footer_margin_h = (touch_menu.footer_top_margin and touch_menu.footer_top_margin:getSize().h) or 0
+        local items_height = menu_height - bar_h - footer_h - footer_margin_h - pad * 2
+        local rows_per_page = math.max(1, math.floor(items_height / cell_total_h) - 1)
+        local per_page = rows_per_page * cols
+        local page_num = math.max(1, math.ceil(#visible / per_page))
+        local page = touch_menu._app_launcher_page or 1
+        if page > page_num then page = page_num end
+        if page < 1 then page = 1 end
+        touch_menu._app_launcher_page = page
+        refs.page = page
+        refs.page_num = page_num
+
+        local page_items = {}
+        if #visible > 0 then
+            local start_idx = (page - 1) * per_page + 1
+            local end_idx = math.min(start_idx + per_page - 1, #visible)
+            for i = start_idx, end_idx do
+                page_items[#page_items + 1] = visible[i]
+            end
+        end
+
         if #visible == 0 then
-            touch_menu._qs_refs = refs
+            touch_menu._zen_panel_refs = refs
             return VerticalGroup:new{
                 align = "center",
                 VerticalSpan:new{ width = Screen:scaleBySize(16) },
@@ -239,7 +276,7 @@ local function apply_app_launcher()
             VerticalSpan:new{ width = pad },
         }
 
-        for i, entry in ipairs(visible) do
+        for i, entry in ipairs(page_items) do
             local col = ((i - 1) % cols) + 1
             if col == 1 then
                 rows[#rows + 1] = HorizontalGroup:new{ align = "top" }
@@ -256,7 +293,7 @@ local function apply_app_launcher()
                 icon_size = icon_size,
                 label_face = label_face,
                 label = Model.display_label(entry),
-                icon = entry.icon or (entry.type == "folder" and "app_menu" or "app_launcher"),
+                icon = entry.icon or (entry.type == "folder" and DEFAULT_FOLDER_ICON or DEFAULT_ENTRY_ICON),
                 dim = dim,
                 callback = not dim and function()
                     activate_entry(touch_menu, entry)
@@ -278,7 +315,15 @@ local function apply_app_launcher()
             panel[#panel + 1] = row
         end
         panel[#panel + 1] = VerticalSpan:new{ width = pad }
-        touch_menu._qs_refs = refs
+        refs.goto_page = function(nb)
+            if page_num <= 1 then return false end
+            if nb > page_num then nb = 1 elseif nb < 1 then nb = page_num end
+            if nb == page then return false end
+            touch_menu._app_launcher_page = nb
+            touch_menu:updateItems(1)
+            return true
+        end
+        touch_menu._zen_panel_refs = refs
         return panel
     end
 
@@ -303,11 +348,21 @@ local function apply_app_launcher()
         end
     end
 
-    local function insert_tab(menu_self)
-        if not is_enabled() or type(menu_self.tab_item_table) ~= "table" then return end
-        if find_tab(menu_self.tab_item_table, "app_launcher") then return end
+    local function sync_tab(menu_self)
+        if type(menu_self.tab_item_table) ~= "table" then return end
+        local existing = find_tab(menu_self.tab_item_table, "app_launcher")
+        if not is_enabled() then
+            if existing then
+                table.remove(menu_self.tab_item_table, existing)
+            end
+            return
+        end
+        if existing then return end
+        local zen_pos = find_tab(menu_self.tab_item_table, "zen_ui")
         local qs_pos = find_tab(menu_self.tab_item_table, "quicksettings")
-        table.insert(menu_self.tab_item_table, qs_pos and (qs_pos + 1) or 1, app_launcher_tab)
+        table.insert(menu_self.tab_item_table,
+            zen_pos and (zen_pos + 1) or qs_pos and (qs_pos + 1) or 1,
+            app_launcher_tab)
     end
 
     local function patch_menu_class(menu_class)
@@ -316,7 +371,14 @@ local function apply_app_launcher()
         local orig_sut = menu_class.setUpdateItemTable
         menu_class.setUpdateItemTable = function(self)
             orig_sut(self)
-            insert_tab(self)
+            sync_tab(self)
+        end
+        local orig_onShowMenu = menu_class.onShowMenu
+        if type(orig_onShowMenu) == "function" then
+            menu_class.onShowMenu = function(self, ...)
+                sync_tab(self)
+                return orig_onShowMenu(self, ...)
+            end
         end
     end
 
@@ -328,25 +390,61 @@ local function apply_app_launcher()
     local TouchMenu = require("ui/widget/touchmenu")
     if not TouchMenu.__zen_app_launcher_back_patched then
         TouchMenu.__zen_app_launcher_back_patched = true
-        local function leave_folder(self)
-            if self.item_table and self.item_table.id == "app_launcher"
-                    and self._app_launcher_folder_id then
-                self._app_launcher_folder_id = nil
+        local function reset_folder(self, refresh)
+            if not self._app_launcher_folder_id then return false end
+            self._app_launcher_folder_id = nil
+            self._app_launcher_page = 1
+            if refresh and self.updateItems then
                 self:updateItems(1)
-                return true
+            end
+            return true
+        end
+
+        local function leave_folder(self)
+            if self.item_table and self.item_table.id == "app_launcher" then
+                return reset_folder(self, true)
             end
             return false
         end
-        local orig_onBack = TouchMenu.onBack
-        TouchMenu.onBack = function(self, ...)
-            if leave_folder(self) then return true end
-            return orig_onBack(self, ...)
+
+        local orig_switchMenuTab = TouchMenu.switchMenuTab
+        TouchMenu.switchMenuTab = function(self, tab_num, ...)
+            local current_is_launcher = self.item_table and self.item_table.id == "app_launcher"
+            local next_tab = type(self.tab_item_table) == "table" and self.tab_item_table[tab_num] or nil
+            if current_is_launcher and (not next_tab or next_tab.id ~= "app_launcher") then
+                reset_folder(self, false)
+                self._app_launcher_page = 1
+            end
+            return orig_switchMenuTab(self, tab_num, ...)
         end
+
+        local orig_onCloseWidget = TouchMenu.onCloseWidget
+        TouchMenu.onCloseWidget = function(self, ...)
+            reset_folder(self, false)
+            if orig_onCloseWidget then
+                return orig_onCloseWidget(self, ...)
+            end
+        end
+
         local orig_onClose = TouchMenu.onClose
         TouchMenu.onClose = function(self, ...)
-            if leave_folder(self) then return true end
-            return orig_onClose(self, ...)
+            if self.item_table and self.item_table.id == "app_launcher" then
+                reset_folder(self, false)
+            end
+            if orig_onClose then
+                return orig_onClose(self, ...)
+            end
+            return false
         end
+
+        local orig_onBack = TouchMenu.onBack
+        TouchMenu.onBack = function(self, ...)
+            if leave_folder(self) then
+                return true
+            end
+            return orig_onBack(self, ...)
+        end
+
         local orig_onFocusMove = TouchMenu.onFocusMove
         TouchMenu.onFocusMove = function(self, args)
             local dx = type(args) == "table" and args[1] or 0

@@ -15,6 +15,8 @@ if _plugin_root then
         ["zen_ui_update"]       = "zen_ui_update.svg",
         ["library"]             = "library.svg",
         ["app_launcher"]        = "app_launcher.svg",
+        ["lightning"]           = "lightning.svg",
+        ["folder_open"]         = "folder_open.svg",
         -- Highlight / lookup popup (shared by highlight_menu + dict_quick_lookup)
         ["lookup.highlight"]    = "lookup_highlight.svg",
         ["lookup.vocab"]        = "lookup_vocab.svg",

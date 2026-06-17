@@ -1,4 +1,5 @@
 local _ = require("gettext")
+local Store = require("modules/menu/app_launcher/store")
 
 local M = {}
 
@@ -66,11 +67,8 @@ local function max_id(entries, current)
     return current
 end
 
-function M.ensure(config)
-    if type(config.app_launcher) ~= "table" then
-        config.app_launcher = {}
-    end
-    local cfg = config.app_launcher
+function M.ensure()
+    local cfg = Store.load()
     local entries, changed = sanitize_list(cfg.entries, true)
     if changed then
         cfg.entries = entries
@@ -80,8 +78,16 @@ function M.ensure(config)
     local max_seen = max_id(cfg.entries, 0)
     if type(cfg.next_id) ~= "number" or cfg.next_id < max_seen then
         cfg.next_id = max_seen
+        changed = true
+    end
+    if changed then
+        Store.save(cfg)
     end
     return cfg
+end
+
+function M.save(cfg)
+    return Store.save(cfg)
 end
 
 function M.next_id(cfg)
@@ -121,8 +127,8 @@ function M.remove_by_id(entries, id)
 end
 
 function M.move_to_folder(entries, id, folder_id)
-    local _list, _index, entry = M.find_by_id(entries, id)
-    local _folder_list, _folder_index, folder = M.find_by_id(entries, folder_id)
+    local entry = select(3, M.find_by_id(entries, id))
+    local folder = select(3, M.find_by_id(entries, folder_id))
     if not entry or not folder or entry.type == "folder" or folder.type ~= "folder" then
         return false
     end
@@ -133,7 +139,8 @@ function M.move_to_folder(entries, id, folder_id)
 end
 
 function M.move_to_root(entries, id)
-    local _list, _index, entry, parent = M.find_by_id(entries, id)
+    local found = { M.find_by_id(entries, id) }
+    local entry, parent = found[3], found[4]
     if not entry or not parent then return false end
     M.remove_by_id(entries, id)
     entries[#entries + 1] = entry

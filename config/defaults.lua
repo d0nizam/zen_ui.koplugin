@@ -128,10 +128,6 @@ local defaults = {
         flip_lh_rh_icon = false,
         rotate_action = "90",
     },
-    app_launcher = {
-        entries = {},
-        next_id = 0,
-    },
     status_bar = {
         custom_text = " ",
         separator_key = "small-space",

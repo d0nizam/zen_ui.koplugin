@@ -59,16 +59,6 @@ local function ensure_patch_loaded(plugin, feature)
         return true
     end
 
-    if feature == "app_launcher" and not RUNTIME_PATCHES.quick_settings then
-        local ok_panel_require, panel_fn = pcall(require, PATCH_MODULES.quick_settings)
-        if ok_panel_require and type(panel_fn) == "function" then
-            local ok_panel = with_plugin(plugin, panel_fn)
-            if ok_panel then
-                RUNTIME_PATCHES.quick_settings = true
-            end
-        end
-    end
-
     local module_name = PATCH_MODULES[feature]
     if not module_name then
         return true

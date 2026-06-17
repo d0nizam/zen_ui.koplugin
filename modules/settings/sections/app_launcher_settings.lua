@@ -6,6 +6,8 @@ local Model = require("modules/menu/app_launcher/model")
 local PluginScan = require("modules/menu/app_launcher/plugin_scan")
 
 local M = {}
+local DEFAULT_ENTRY_ICON = "lightning"
+local DEFAULT_FOLDER_ICON = "folder_open"
 
 local function trim(text)
     return (text or ""):gsub("^%s+", ""):gsub("%s+$", "")
@@ -19,7 +21,12 @@ function M.build(ctx)
     local show_entries_arrange
 
     local function save_app_launcher()
-        save_and_apply("app_launcher")
+        Model.save(cfg)
+        if ctx.apply_feature then
+            ctx.apply_feature("app_launcher")
+        else
+            save_and_apply("app_launcher")
+        end
     end
 
     local function open_entry_settings(touch_menu, entry, parent)
@@ -56,12 +63,32 @@ function M.build(ctx)
         end)
     end
 
+    local function action_label(entry)
+        if ok_disp and entry.action and next(entry.action) then
+            local text = Dispatcher:menuTextFunc(entry.action)
+            if text and text ~= "" and text ~= _("Nothing") then
+                return text
+            end
+        end
+        return nil
+    end
+
+    local function sync_action_label(entry)
+        if entry.type ~= "action" then return end
+        local current = entry.label or ""
+        if entry.label_auto == true or current == "" or current == _("Action") then
+            entry.label = action_label(entry) or _("Action")
+            entry.label_auto = true
+        end
+    end
+
     local function prompt_label(entry, title)
         local InputDialog = require("ui/widget/inputdialog")
         local dialog
         dialog = InputDialog:new{
             title = title,
             input = entry.label or "",
+            input_hint = entry.type == "action" and _("Leave empty to use action title") or nil,
             buttons = {{
                 {
                     text = _("Cancel"),
@@ -76,6 +103,11 @@ function M.build(ctx)
                         local label = trim(dialog:getInputText())
                         if label ~= "" then
                             entry.label = label
+                            entry.label_auto = false
+                            save_app_launcher()
+                        elseif entry.type == "action" then
+                            entry.label_auto = true
+                            sync_action_label(entry)
                             save_app_launcher()
                         end
                         UIManager:close(dialog)
@@ -102,7 +134,8 @@ function M.build(ctx)
             id = Model.next_id(cfg),
             type = "action",
             label = label or _("Action"),
-            icon = "app_launcher",
+            label_auto = true,
+            icon = DEFAULT_ENTRY_ICON,
             action = {},
         }
     end
@@ -137,7 +170,7 @@ function M.build(ctx)
                             id = Model.next_id(cfg),
                             type = "folder",
                             label = label,
-                            icon = "app_menu",
+                            icon = DEFAULT_FOLDER_ICON,
                             children = {},
                         }
                         insert_entry(entry)
@@ -171,7 +204,7 @@ function M.build(ctx)
                         id = Model.next_id(cfg),
                         type = "plugin",
                         label = plugin.title,
-                        icon = "app_launcher",
+                        icon = DEFAULT_ENTRY_ICON,
                         plugin = { key = plugin.key, method = plugin.method },
                     }
                     insert_entry(entry, folder)
@@ -216,6 +249,7 @@ function M.build(ctx)
         local caller = setmetatable({}, {
             __newindex = function(t, key, value)
                 if key == "updated" and value then
+                    sync_action_label(entry)
                     save_app_launcher()
                 else
                     rawset(t, key, value)
@@ -241,6 +275,12 @@ function M.build(ctx)
     local function build_move_items(entry, parent)
         local items = {}
         if entry.type ~= "folder" then
+            local folder_choices = {}
+            for _i, candidate in ipairs(cfg.entries) do
+                if candidate.type == "folder" and not (parent and candidate.id == parent.id) then
+                    folder_choices[#folder_choices + 1] = candidate
+                end
+            end
             if parent then
                 items[#items + 1] = {
                     text = _("Move out of folder"),
@@ -251,29 +291,57 @@ function M.build(ctx)
                         end
                     end,
                 }
-            else
-                for _i, candidate in ipairs(cfg.entries) do
-                    if candidate.type == "folder" then
-                        local folder_id = candidate.id
-                        items[#items + 1] = {
-                            text = T(_("Move to folder: %1"), candidate.label),
-                            callback = function(touch_menu)
-                                if Model.move_to_folder(cfg.entries, entry.id, folder_id) then
-                                    save_app_launcher()
-                                    if touch_menu then touch_menu:backToUpperMenu() end
-                                end
-                            end,
+            end
+            if #folder_choices > 0 then
+                items[#items + 1] = {
+                    text = _("Move to folder"),
+                    keep_menu_open = true,
+                    callback = function(touch_menu)
+                        local ButtonDialog = require("ui/widget/buttondialog")
+                        local dialog
+                        local buttons = {}
+                        for _i, folder in ipairs(folder_choices) do
+                            local folder_id = folder.id
+                            buttons[#buttons + 1] = {{
+                                text = folder.label,
+                                callback = function()
+                                    UIManager:close(dialog)
+                                    if Model.move_to_folder(cfg.entries, entry.id, folder_id) then
+                                        save_app_launcher()
+                                        if touch_menu then touch_menu:backToUpperMenu() end
+                                    end
+                                end,
+                            }}
+                        end
+                        dialog = ButtonDialog:new{
+                            title = _("Move to folder"),
+                            title_align = "center",
+                            width_factor = 0.85,
+                            buttons = buttons,
                         }
-                    end
-                end
+                        UIManager:show(dialog)
+                    end,
+                }
             end
         end
         return items
     end
 
     build_entry_items = function(entry, parent)
-        local items = {
-            {
+        local items = {}
+        local function add_icon_item()
+            items[#items + 1] = {
+                text_func = function()
+                    return T(_("Icon: %1"), entry.icon or DEFAULT_ENTRY_ICON)
+                end,
+                keep_menu_open = true,
+                callback = function(touch_menu)
+                    show_icon_picker(entry, touch_menu)
+                end,
+            }
+        end
+        local function add_label_item()
+            items[#items + 1] = {
                 text_func = function()
                     return T(_("Label: %1"), entry.label)
                 end,
@@ -281,21 +349,16 @@ function M.build(ctx)
                 callback = function()
                     prompt_label(entry, _("Launcher label"))
                 end,
-            },
-            {
-                text_func = function()
-                    return T(_("Icon: %1"), entry.icon or "app_launcher")
-                end,
-                keep_menu_open = true,
-                callback = function(touch_menu)
-                    show_icon_picker(entry, touch_menu)
-                end,
-            },
-        }
+            }
+        end
         if entry.type == "action" then
             local picker = build_action_picker(entry)
             if picker then items[#items + 1] = picker end
+            add_icon_item()
+            add_label_item()
         elseif entry.type == "folder" then
+            add_label_item()
+            add_icon_item()
             items[#items + 1] = {
                 text = _("Folder entries"),
                 keep_menu_open = true,
@@ -307,6 +370,9 @@ function M.build(ctx)
             for _i, item in ipairs(add_sub) do
                 items[#items + 1] = item
             end
+        else
+            add_label_item()
+            add_icon_item()
         end
         local move_items = build_move_items(entry, parent)
         for _i, item in ipairs(move_items) do
@@ -316,20 +382,18 @@ function M.build(ctx)
             text = _("Delete"),
             separator = true,
             callback = function(touch_menu)
+                local ConfirmBox = require("ui/widget/confirmbox")
                 local function remove()
                     Model.remove_by_id(cfg.entries, entry.id)
                     save_app_launcher()
                     if touch_menu then touch_menu:backToUpperMenu() end
                 end
-                if entry.type == "folder" and entry.children and #entry.children > 0 then
-                    UIManager:show(require("ui/widget/confirmbox"):new{
-                        text = _("Delete this folder and its entries?"),
-                        ok_text = _("Delete"),
-                        ok_callback = remove,
-                    })
-                else
-                    remove()
-                end
+                UIManager:show(ConfirmBox:new{
+                    text = entry.type == "folder" and entry.children and #entry.children > 0
+                        and _("Delete this folder and its entries?") or _("Delete this entry?"),
+                    ok_text = _("Delete"),
+                    ok_callback = remove,
+                })
             end,
         }
         return items
@@ -347,19 +411,25 @@ function M.build(ctx)
             end
         end
         local ZenArrangeList = require("common/ui/zen_arrange_list")
-        local sort_items = {}
-        for _i, entry in ipairs(list) do
-            sort_items[#sort_items + 1] = {
-                text_func = function()
-                    return Model.display_label(entry)
-                end,
-                orig_entry = entry,
-                sub_title = Model.display_label(entry),
-                sub_item_table_func = function()
-                    return build_entry_items(entry, parent)
-                end,
-            }
+        local sort_items
+        local function build_sort_items()
+            local items = {}
+            for _i, entry in ipairs(list) do
+                items[#items + 1] = {
+                    text_func = function()
+                        return Model.display_label(entry)
+                    end,
+                    orig_entry = entry,
+                    sub_title = Model.display_label(entry),
+                    sub_item_table_func = function()
+                        return build_entry_items(entry, parent)
+                    end,
+                }
+            end
+            sort_items = items
+            return items
         end
+        sort_items = build_sort_items()
         if #sort_items == 0 then
             local InfoMessage = require("ui/widget/infomessage")
             UIManager:show(InfoMessage:new{ text = _("No entries") })
@@ -382,22 +452,41 @@ function M.build(ctx)
                 end
                 save_app_launcher()
             end,
+            refresh_func = build_sort_items,
         }
     end
 
-    local root_items = add_items(nil)
+    local root_items = {
+        {
+            text = _("Enable"),
+            checked_func = function()
+                return config.features.app_launcher == true
+            end,
+            callback = function(touch_menu)
+                config.features.app_launcher = config.features.app_launcher ~= true
+                save_and_apply("app_launcher")
+                if touch_menu and touch_menu.closeMenu then
+                    touch_menu:closeMenu()
+                end
+            end,
+        },
+        {
+            text = _("Entries") .. " \u{25B8}",
+            separator = true,
+            keep_menu_open = true,
+            callback = function()
+                show_entries_arrange(nil)
+            end,
+        },
+    }
+    local add_root_items = add_items(nil)
+    for _i, item in ipairs(add_root_items) do
+        root_items[#root_items + 1] = item
+    end
     root_items[#root_items + 1] = {
         text = _("Add folder"),
         keep_menu_open = true,
         callback = add_folder,
-    }
-    root_items[#root_items + 1] = {
-        text = _("Entries"),
-        separator = true,
-        keep_menu_open = true,
-        callback = function()
-            show_entries_arrange(nil)
-        end,
     }
 
     return {

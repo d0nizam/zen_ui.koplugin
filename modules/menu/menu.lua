@@ -57,17 +57,6 @@ function M.init(logger, plugin)
         _G.__ZEN_UI_RUNTIME_PATCHES = runtime_patches
     end
 
-    if is_feature_enabled(plugin, "app_launcher")
-            and not is_feature_enabled(plugin, "quick_settings") then
-        local panel_fn = load_patch("quick_settings")
-        if panel_fn then
-            local ok = run_feature(logger, plugin, "quick_settings_panel_support", panel_fn)
-            if ok then
-                runtime_patches.quick_settings = true
-            end
-        end
-    end
-
     for _i, feature in ipairs(FEATURES) do
         if is_feature_enabled(plugin, feature) then
             local fn = load_patch(feature)
