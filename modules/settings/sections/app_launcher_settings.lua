@@ -357,7 +357,7 @@ function M.build(ctx)
             add_label_item()
             add_icon_item()
             items[#items + 1] = {
-                text = _("Folder entries"),
+                text = _("Folder buttons"),
                 keep_menu_open = true,
                 callback = function()
                     show_entries_arrange(entry)
@@ -387,7 +387,7 @@ function M.build(ctx)
                 end
                 UIManager:show(ConfirmBox:new{
                     text = entry.type == "folder" and entry.children and #entry.children > 0
-                        and _("Delete this folder and its entries?") or _("Delete this entry?"),
+                        and _("Delete this folder and its buttons?") or _("Delete this button?"),
                     ok_text = _("Delete"),
                     ok_callback = remove,
                 })
@@ -429,11 +429,11 @@ function M.build(ctx)
         sort_items = build_sort_items()
         if #sort_items == 0 then
             local InfoMessage = require("ui/widget/infomessage")
-            UIManager:show(InfoMessage:new{ text = _("No entries") })
+            UIManager:show(InfoMessage:new{ text = _("No buttons") })
             return
         end
         ZenArrangeList.show{
-            title = parent and parent.label or _("Entries"),
+            title = parent and parent.label or _("Buttons"),
             item_table = sort_items,
             callback = function()
                 local reordered = {}
@@ -468,7 +468,7 @@ function M.build(ctx)
             end,
         },
         {
-            text = _("Entries") .. " \u{25B8}",
+            text = _("Buttons") .. " \u{25B8}",
             separator = true,
             keep_menu_open = true,
             callback = function()
