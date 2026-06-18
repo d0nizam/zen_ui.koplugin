@@ -48,6 +48,12 @@ local DEFAULT_FEATURED_PROGRESS_META = {
     right = "total_pages",
 }
 
+local FEATURED_TEXT_STYLE_DEFAULTS = {
+    title = { font_face = "default", font_size = 11, bold = true },
+    author = { font_face = "default", font_size = 9, bold = false },
+    description = { font_face = "default", font_size = 16, bold = false },
+}
+
 local function copy_default_row_order()
     local out = {}
     for _i, id in ipairs(DEFAULT_ROW_ORDER) do
@@ -82,6 +88,35 @@ local function normalize_order(order)
     return "default"
 end
 
+local function ensure_featured_text_style(mcfg, key)
+    if type(mcfg.text_styles) ~= "table" then mcfg.text_styles = {} end
+    local defaults = FEATURED_TEXT_STYLE_DEFAULTS[key]
+    if type(defaults) ~= "table" then return nil end
+    if type(mcfg.text_styles[key]) ~= "table" then mcfg.text_styles[key] = {} end
+    local style = mcfg.text_styles[key]
+    if type(style.font_face) ~= "string" or style.font_face == "" then
+        style.font_face = defaults.font_face
+    end
+    local size = tonumber(style.font_size)
+    if not size then
+        style.font_size = defaults.font_size
+    else
+        style.font_size = math.max(6, math.min(40, math.floor(size + 0.5)))
+    end
+    if style.bold == nil then
+        style.bold = defaults.bold
+    else
+        style.bold = style.bold == true
+    end
+    return style
+end
+
+local function ensure_featured_text_styles(mcfg)
+    for key, defaults in pairs(FEATURED_TEXT_STYLE_DEFAULTS) do
+        if defaults then ensure_featured_text_style(mcfg, key) end
+    end
+end
+
 local function ensure_module_cfg(dcfg, module_id)
     if type(dcfg.modules) ~= "table" then dcfg.modules = {} end
     if type(dcfg.modules[module_id]) ~= "table" then dcfg.modules[module_id] = {} end
@@ -102,6 +137,7 @@ local function ensure_featured_module_cfg(dcfg, module_id)
     if mcfg.show_status_bar == nil then mcfg.show_status_bar = false end
     if mcfg.status_bar_show_bottom_border == nil then mcfg.status_bar_show_bottom_border = true end
     if mcfg.status_bar_bold_text == nil then mcfg.status_bar_bold_text = true end
+    ensure_featured_text_styles(mcfg)
     if type(mcfg.progress_meta) ~= "table" then mcfg.progress_meta = {} end
     if mcfg.progress_meta.left == nil and mcfg.progress_meta.right == nil then
         for key, side in pairs(mcfg.progress_meta) do

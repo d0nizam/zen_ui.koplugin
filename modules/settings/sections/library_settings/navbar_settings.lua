@@ -117,7 +117,6 @@ function M.build(ctx)
 
     local navbar_tab_items = {
         { id = "books",       text_func = get_books_tab_label },
-        { id = "home",        text_func = get_home_tab_label  },
         { id = "manga",       text = _("Manga")         },
         { id = "news",        text = _("News")          },
         { id = "continue",    text = _("Continue")      },
@@ -126,6 +125,7 @@ function M.build(ctx)
         { id = "collections", text = _("Collections")   },
         { id = "authors",     text = _("Authors")       },
         { id = "series",      text = _("Series")        },
+        { id = "home",        text_func = get_home_tab_label  },
         { id = "tags",        text = _("Tags")          },
         { id = "to_be_read",  text = _("To Be Read")    },
         { id = "search",         text = _("Search")          },
@@ -152,8 +152,8 @@ function M.build(ctx)
     end
 
     local default_tab_ids = {
-        "home", "books", "manga", "news", "history", "favorites",
-        "collections", "authors", "series", "tags", "to_be_read",
+        "books", "manga", "news", "history", "favorites",
+        "collections", "authors", "series", "home", "tags", "to_be_read",
     }
 
     local function get_builtin_tab_label(tab_id)

@@ -5,6 +5,7 @@ local ConfigManager = require("config/manager")
 local HomePresets = require("modules/filebrowser/patches/home/home_presets")
 local PresetStore = require("config/preset_store")
 local Registry = require("modules/filebrowser/patches/home/components/registry")
+local library_font = require("modules/filebrowser/patches/library_font")
 
 local M = {}
 
@@ -33,6 +34,12 @@ local DEFAULT_FEATURED_PROGRESS_META = {
     right = "total_pages",
 }
 
+local FEATURED_TEXT_STYLE_DEFAULTS = {
+    title = { font_face = "default", font_size = 11, bold = true },
+    author = { font_face = "default", font_size = 9, bold = false },
+    description = { font_face = "default", font_size = 16, bold = false },
+}
+
 local function copy_default_order()
     local out = {}
     for _i, id in ipairs(DEFAULT_ORDER) do
@@ -52,6 +59,35 @@ end
 local function normalize_order(order)
     if order == "reverse" then return "reverse" end
     return "default"
+end
+
+local function ensure_featured_text_style(mcfg, key)
+    if type(mcfg.text_styles) ~= "table" then mcfg.text_styles = {} end
+    local defaults = FEATURED_TEXT_STYLE_DEFAULTS[key]
+    if type(defaults) ~= "table" then return nil end
+    if type(mcfg.text_styles[key]) ~= "table" then mcfg.text_styles[key] = {} end
+    local style = mcfg.text_styles[key]
+    if type(style.font_face) ~= "string" or style.font_face == "" then
+        style.font_face = defaults.font_face
+    end
+    local size = tonumber(style.font_size)
+    if not size then
+        style.font_size = defaults.font_size
+    else
+        style.font_size = math.max(6, math.min(40, math.floor(size + 0.5)))
+    end
+    if style.bold == nil then
+        style.bold = defaults.bold
+    else
+        style.bold = style.bold == true
+    end
+    return style
+end
+
+local function ensure_featured_text_styles(mcfg)
+    for key, defaults in pairs(FEATURED_TEXT_STYLE_DEFAULTS) do
+        if defaults then ensure_featured_text_style(mcfg, key) end
+    end
 end
 
 local function ensure_module_cfg(dcfg, module_id)
@@ -74,6 +110,7 @@ local function ensure_featured_cfg(dcfg, module_id)
     if mcfg.show_status_bar == nil then mcfg.show_status_bar = false end
     if mcfg.status_bar_show_bottom_border == nil then mcfg.status_bar_show_bottom_border = true end
     if mcfg.status_bar_bold_text == nil then mcfg.status_bar_bold_text = true end
+    ensure_featured_text_styles(mcfg)
     if type(mcfg.progress_meta) ~= "table" then mcfg.progress_meta = {} end
     if mcfg.progress_meta.left == nil and mcfg.progress_meta.right == nil then
         for key, side in pairs(mcfg.progress_meta) do
@@ -435,6 +472,154 @@ function M.build(ctx)
         }
     end
 
+    local function font_label(face)
+        if face == nil or face == "" or face == "default" then return _("default") end
+        local ok_fc, FontChooser = pcall(require, "ui/widget/fontchooser")
+        return ok_fc and FontChooser.getFontNameText(face) or face
+    end
+
+    local function chooser_default_font()
+        local font_name = library_font.getFontName()
+        if font_name and font_name ~= "" and font_name ~= "cfont" then
+            return font_name
+        end
+        local footer_settings = G_reader_settings:readSetting("footer") or {}
+        return footer_settings.text_font_face or "NotoSans-Regular.ttf"
+    end
+
+    local function save_featured_text_style(touchmenu_instance)
+        save_home("reinit")
+        if touchmenu_instance then touchmenu_instance:updateItems() end
+    end
+
+    local function featured_text_style_summary(mcfg, key)
+        local style = ensure_featured_text_style(mcfg, key)
+        local weight = style.bold and _("bold") or _("regular")
+        return string.format("%s, %s, %s", font_label(style.font_face), tostring(style.font_size), weight)
+    end
+
+    local function build_featured_text_style_items(mcfg, key, label)
+        local defaults = FEATURED_TEXT_STYLE_DEFAULTS[key]
+        return {
+            {
+                text_func = function()
+                    local style = ensure_featured_text_style(mcfg, key)
+                    return string.format("%s %s", _("Font size:"), tostring(style.font_size))
+                end,
+                keep_menu_open = true,
+                callback = function(touchmenu_instance)
+                    local SpinWidget = require("ui/widget/spinwidget")
+                    local style = ensure_featured_text_style(mcfg, key)
+                    UIManager:show(SpinWidget:new{
+                        title_text = string.format("%s %s", label, _("font size")),
+                        value = style.font_size,
+                        value_min = 6,
+                        value_max = 40,
+                        default_value = defaults.font_size,
+                        callback = function(spin)
+                            style.font_size = math.max(6, math.min(40, spin.value))
+                            save_featured_text_style(touchmenu_instance)
+                        end,
+                    })
+                end,
+            },
+            {
+                text_func = function()
+                    local style = ensure_featured_text_style(mcfg, key)
+                    return string.format("%s %s", _("Font:"), font_label(style.font_face))
+                end,
+                keep_menu_open = true,
+                callback = function(touchmenu_instance)
+                    local ok_fc, FontChooser = pcall(require, "ui/widget/fontchooser")
+                    if not ok_fc then return end
+                    local style = ensure_featured_text_style(mcfg, key)
+                    local default_font = chooser_default_font()
+                    local display_face = style.font_face == "default" and default_font or style.font_face
+                    UIManager:show(FontChooser:new{
+                        title = string.format("%s %s", label, _("font")),
+                        font_file = display_face,
+                        default_font_file = default_font,
+                        callback = function(file)
+                            if style.font_face ~= file then
+                                style.font_face = file
+                                save_featured_text_style(touchmenu_instance)
+                            end
+                        end,
+                    })
+                end,
+                hold_callback = function(touchmenu_instance)
+                    local style = ensure_featured_text_style(mcfg, key)
+                    if style.font_face ~= "default" then
+                        style.font_face = "default"
+                        save_featured_text_style(touchmenu_instance)
+                    end
+                end,
+            },
+            {
+                text = _("Bold"),
+                checked_func = function()
+                    return ensure_featured_text_style(mcfg, key).bold == true
+                end,
+                callback = function(touchmenu_instance)
+                    local style = ensure_featured_text_style(mcfg, key)
+                    style.bold = style.bold ~= true
+                    save_featured_text_style(touchmenu_instance)
+                end,
+            },
+            {
+                text = _("Use default style"),
+                callback = function(touchmenu_instance)
+                    mcfg.text_styles[key] = {
+                        font_face = defaults.font_face,
+                        font_size = defaults.font_size,
+                        bold = defaults.bold,
+                    }
+                    save_featured_text_style(touchmenu_instance)
+                end,
+            },
+        }
+    end
+
+    local function build_featured_text_styles_items(mcfg)
+        local items = {
+            needs_refresh = true,
+            refresh_func = function()
+                return build_featured_text_styles_items(mcfg)
+            end,
+        }
+        items[#items + 1] = {
+            sub_title = _("Title"),
+            text_func = function()
+                return _("Title") .. ": " .. featured_text_style_summary(mcfg, "title")
+            end,
+            sub_item_table = build_featured_text_style_items(mcfg, "title", _("Title")),
+        }
+        items[#items + 1] = {
+            sub_title = _("Author"),
+            text_func = function()
+                return _("Author") .. ": " .. featured_text_style_summary(mcfg, "author")
+            end,
+            sub_item_table = build_featured_text_style_items(mcfg, "author", _("Author")),
+        }
+        items[#items + 1] = {
+            sub_title = _("Description"),
+            text_func = function()
+                return _("Description") .. ": " .. featured_text_style_summary(mcfg, "description")
+            end,
+            sub_item_table = build_featured_text_style_items(mcfg, "description", _("Description")),
+        }
+        return items
+    end
+
+    local function featured_text_styles_item(mcfg)
+        return {
+            text = _("Text styles"),
+            sub_item_table_func = function()
+                return build_featured_text_styles_items(mcfg)
+            end,
+        }
+    end
+
     local function interactive_item(mcfg)
         return {
             text = _("Interactive"),
@@ -532,6 +717,26 @@ function M.build(ctx)
                 end,
             },
             {
+                text = _("Show description"),
+                checked_func = function()
+                    return mcfg.show_description ~= false
+                end,
+                callback = function()
+                    mcfg.show_description = mcfg.show_description == false
+                    save_home("reinit")
+                end,
+            },
+            interactive_item(mcfg),
+            {
+                text = _("Top status bar"),
+                sub_item_table = featured_status_bar_options(mcfg),
+            },
+            featured_text_styles_item(mcfg),
+            {
+                text = _("Progress labels"),
+                sub_item_table = build_progress_meta_items(mcfg),
+            },
+            {
                 text_func = function()
                     return _("Book: ") .. path_label(mcfg.path)
                 end,
@@ -543,25 +748,6 @@ function M.build(ctx)
                         if touchmenu_instance then touchmenu_instance:updateItems() end
                     end)
                 end,
-            },
-            interactive_item(mcfg),
-            {
-                text = _("Top status bar"),
-                sub_item_table = featured_status_bar_options(mcfg),
-            },
-            {
-                text = _("Show description"),
-                checked_func = function()
-                    return mcfg.show_description ~= false
-                end,
-                callback = function()
-                    mcfg.show_description = mcfg.show_description == false
-                    save_home("reinit")
-                end,
-            },
-            {
-                text = _("Progress labels"),
-                sub_item_table = build_progress_meta_items(mcfg),
             },
             {
                 text = _("Clear book"),
@@ -589,6 +775,26 @@ function M.build(ctx)
                     save_home("reinit")
                 end,
             },
+            {
+                text = _("Show book titles"),
+                checked_func = function()
+                    return mcfg.show_strip_titles == true
+                end,
+                callback = function()
+                    mcfg.show_strip_titles = mcfg.show_strip_titles ~= true
+                    save_home("reinit")
+                end,
+            },
+            {
+                text = _("Show badges"),
+                checked_func = function()
+                    return mcfg.show_badges == true
+                end,
+                callback = function()
+                    mcfg.show_badges = mcfg.show_badges ~= true
+                    save_home("reinit")
+                end,
+            },
             interactive_item(mcfg),
             {
                 text = _("Add book"),
@@ -608,26 +814,6 @@ function M.build(ctx)
                             touchmenu_instance:updateItems()
                         end
                     end)
-                end,
-            },
-            {
-                text = _("Show book titles"),
-                checked_func = function()
-                    return mcfg.show_strip_titles == true
-                end,
-                callback = function()
-                    mcfg.show_strip_titles = mcfg.show_strip_titles ~= true
-                    save_home("reinit")
-                end,
-            },
-            {
-                text = _("Show badges"),
-                checked_func = function()
-                    return mcfg.show_badges == true
-                end,
-                callback = function()
-                    mcfg.show_badges = mcfg.show_badges ~= true
-                    save_home("reinit")
                 end,
             },
         }
@@ -671,15 +857,6 @@ function M.build(ctx)
                     save_home("reinit")
                 end,
             },
-            interactive_item(mcfg),
-            {
-                text = _("Top status bar"),
-                sub_item_table = featured_status_bar_options(mcfg),
-            },
-            {
-                text = _("Order"),
-                sub_item_table = build_order_items(mcfg),
-            },
             {
                 text = _("Show description"),
                 checked_func = function()
@@ -689,6 +866,16 @@ function M.build(ctx)
                     mcfg.show_description = mcfg.show_description == false
                     save_home("reinit")
                 end,
+            },
+            interactive_item(mcfg),
+            {
+                text = _("Top status bar"),
+                sub_item_table = featured_status_bar_options(mcfg),
+            },
+            featured_text_styles_item(mcfg),
+            {
+                text = _("Order"),
+                sub_item_table = build_order_items(mcfg),
             },
             {
                 text = _("Progress labels"),
@@ -713,11 +900,6 @@ function M.build(ctx)
                     save_home("reinit")
                 end,
             },
-            interactive_item(mcfg),
-            {
-                text = _("Order"),
-                sub_item_table = build_order_items(mcfg),
-            },
             {
                 text = _("Two rows"),
                 checked_func = function()
@@ -731,26 +913,6 @@ function M.build(ctx)
                         mcfg.count = 4
                     end
                     save_home("reinit")
-                end,
-            },
-            {
-                text_func = function()
-                    return _("Books shown: ") .. tostring(mcfg.count or 4)
-                end,
-                keep_menu_open = true,
-                callback = function()
-                    local SpinWidget = require("ui/widget/spinwidget")
-                    local is_two = mcfg.two_rows == true
-                    UIManager:show(SpinWidget:new{
-                        title_text = _("Books shown"),
-                        value = mcfg.count or (is_two and 8 or 4),
-                        value_min = is_two and 2 or 3,
-                        value_max = is_two and 10 or 5,
-                        callback = function(spin)
-                            mcfg.count = spin.value
-                            save_home("reinit")
-                        end,
-                    })
                 end,
             },
             {
@@ -772,6 +934,31 @@ function M.build(ctx)
                     mcfg.show_badges = mcfg.show_badges ~= true
                     save_home("reinit")
                 end,
+            },
+            interactive_item(mcfg),
+            {
+                text_func = function()
+                    return _("Books shown: ") .. tostring(mcfg.count or 4)
+                end,
+                keep_menu_open = true,
+                callback = function()
+                    local SpinWidget = require("ui/widget/spinwidget")
+                    local is_two = mcfg.two_rows == true
+                    UIManager:show(SpinWidget:new{
+                        title_text = _("Books shown"),
+                        value = mcfg.count or (is_two and 8 or 4),
+                        value_min = is_two and 2 or 3,
+                        value_max = is_two and 10 or 5,
+                        callback = function(spin)
+                            mcfg.count = spin.value
+                            save_home("reinit")
+                        end,
+                    })
+                end,
+            },
+            {
+                text = _("Order"),
+                sub_item_table = build_order_items(mcfg),
             },
         }
     end

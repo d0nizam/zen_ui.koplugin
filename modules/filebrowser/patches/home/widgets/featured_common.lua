@@ -23,10 +23,33 @@ local _ = require("gettext")
 local M = {}
 M.SIZE = { preferred_pct = 0.36, min_pct = 0.22, max_pct = 0.50, grow_priority = 1 }
 
+local DEFAULT_TEXT_STYLES = {
+    title = { font_face = "default", font_size = 11, bold = true },
+    author = { font_face = "default", font_size = 9, bold = false },
+    description = { font_face = "default", font_size = 16, bold = false },
+}
+
 local function clamp(v, min_v, max_v)
     if v < min_v then return min_v end
     if v > max_v then return max_v end
     return v
+end
+
+local function text_style(module_cfg, key)
+    local defaults = DEFAULT_TEXT_STYLES[key]
+    local styles = type(module_cfg.text_styles) == "table" and module_cfg.text_styles or {}
+    local style = type(styles[key]) == "table" and styles[key] or {}
+    local size = tonumber(style.font_size) or defaults.font_size
+    return {
+        font_face = type(style.font_face) == "string" and style.font_face ~= "" and style.font_face or defaults.font_face,
+        font_size = clamp(math.floor(size + 0.5), 6, 40),
+        bold = style.bold == nil and defaults.bold or style.bold == true,
+    }
+end
+
+local function get_text_face(style, size)
+    local font_name = style.font_face == "default" and library_font.getFontName() or style.font_face
+    return Font:getFace(font_name, size)
 end
 
 local function paint_pill(bb, x, y, w, h, color)
@@ -164,10 +187,13 @@ function M.build(ctx, source_key)
 
     -- Fonts
     local scale = clamp(col_h / 300, 0.55, 1.28) * library_font.getScale(18)
-    local title_face = Font:getFace("smallinfofont", Screen:scaleBySize(math.floor(11 * scale + 0.5)))
-    local meta_face = Font:getFace("smallinfofont", Screen:scaleBySize(math.floor(9 * scale + 0.5)))
+    local title_style = text_style(module_cfg, "title")
+    local author_style = text_style(module_cfg, "author")
+    local description_style = text_style(module_cfg, "description")
+    local title_face = get_text_face(title_style, Screen:scaleBySize(math.floor(title_style.font_size * scale + 0.5)))
+    local meta_face = get_text_face(author_style, Screen:scaleBySize(math.floor(author_style.font_size * scale + 0.5)))
     local stats_face = Font:getFace("smallinfofont", Screen:scaleBySize(math.floor(6.5 * scale + 0.5)))
-    local desc_face = library_font.getFace(library_font.scaleValue(16))
+    local desc_face = get_text_face(description_style, library_font.scaleValue(description_style.font_size))
 
     -- Optional status bar (top of right column)
     local status_widget = show_status_bar and ctx.buildStatusRow(text_w, {
@@ -213,7 +239,7 @@ function M.build(ctx, source_key)
     -- Title: up to 2 lines before truncating
     local title_line_h = math.max(1, math.floor((tonumber(title_face.size) or 12) * 1.05 + 0.5))
     local author_line_h = math.max(1, math.floor((tonumber(meta_face.size) or 10) * 1.05 + 0.5))
-    local probe = TextWidget:new{ text = book.title or "", face = title_face, bold = true }
+    local probe = TextWidget:new{ text = book.title or "", face = title_face, bold = title_style.bold == true }
     local title_needs_2_lines = probe:getSize().w > text_w
     probe:free()
     local title_h = title_line_h * (title_needs_2_lines and 2 or 1)
@@ -222,7 +248,7 @@ function M.build(ctx, source_key)
     local has_author = author_text ~= ""
     local author_h = 0
     if has_author then
-        local author_probe = TextWidget:new{ text = author_text, face = meta_face }
+        local author_probe = TextWidget:new{ text = author_text, face = meta_face, bold = author_style.bold == true }
         local lines = author_probe:getSize().w > text_w and 2 or 1
         author_probe:free()
         author_h = author_line_h * lines
@@ -264,7 +290,7 @@ function M.build(ctx, source_key)
             width = text_w,
             height = title_h,
             face = title_face,
-            bold = true,
+            bold = title_style.bold == true,
             line_height = 0,
             height_overflow_show_ellipsis = true,
         })
@@ -278,6 +304,7 @@ function M.build(ctx, source_key)
             width = text_w,
             height = author_h,
             face = meta_face,
+            bold = author_style.bold == true,
             line_height = 0,
             fgcolor = Blitbuffer.COLOR_BLACK,
             height_overflow_show_ellipsis = true,
@@ -293,7 +320,12 @@ function M.build(ctx, source_key)
     local spacer_h = math.max(0, col_h - actual_top_h - actual_bottom_h)
 
     -- Description fills the middle space
-    local desc_line_h_probe = TextBoxWidget:new{ text = "A\nA", width = text_w, face = desc_face }
+    local desc_line_h_probe = TextBoxWidget:new{
+        text = "A\nA",
+        width = text_w,
+        face = desc_face,
+        bold = description_style.bold == true,
+    }
     local desc_line_h = math.max(1, math.ceil(desc_line_h_probe:getSize().h / 2))
     desc_line_h_probe:free()
 
@@ -320,6 +352,7 @@ function M.build(ctx, source_key)
             width = text_w,
             height = desc_h,
             face = desc_face,
+            bold = description_style.bold == true,
             fgcolor = Blitbuffer.COLOR_BLACK,
             height_overflow_show_ellipsis = true,
         }

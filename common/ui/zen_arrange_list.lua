@@ -160,8 +160,17 @@ local function item_base_text(item)
     return item._zen_arrange_base_text
 end
 
+local function strip_value_suffix(text)
+    if type(text) ~= "string" then return text end
+    local value_start = text:find(": ", 1, true)
+    if value_start and value_start > 1 then
+        return text:sub(1, value_start - 1)
+    end
+    return text
+end
+
 local function item_submenu_title(item)
-    return item.sub_title or item_base_text(item) or item.text
+    return item.sub_title or strip_value_suffix(item_base_text(item)) or item.text
 end
 
 local function update_dynamic_text(items)
@@ -176,16 +185,26 @@ local function update_dynamic_text(items)
     end
 end
 
+local function repopulate(sort_widget)
+    if not sort_widget then return end
+    sort_widget:_populateItems()
+    UIManager:setDirty(sort_widget, "ui")
+end
+
 local function refresh_after_callbacks(items, refresh, menu_proxy)
     if type(items) ~= "table" or type(refresh) ~= "function" then return end
     for _i, item in ipairs(items) do
-        if type(item.callback) == "function" and not item._zen_arrange_refresh_wrapped then
-            local orig_callback = item.callback
+        if type(item.callback) == "function"
+                and (not item._zen_arrange_refresh_wrapped
+                    or item._zen_arrange_refresh_proxy ~= menu_proxy) then
+            local orig_callback = item._zen_arrange_orig_callback or item.callback
             item.callback = function(...)
                 local result = orig_callback(menu_proxy, select(2, ...))
                 refresh()
                 return result
             end
+            item._zen_arrange_orig_callback = orig_callback
+            item._zen_arrange_refresh_proxy = menu_proxy
             item._zen_arrange_refresh_wrapped = true
         end
         refresh_after_callbacks(item.sub_item_table, refresh, menu_proxy)
@@ -232,7 +251,7 @@ show_submenu = function(title, items, refresh)
         refresh_after_callbacks(items, refresh_lists, menu_proxy)
         if sort_widget then
             sort_widget.item_table = items
-            sort_widget:_populateItems()
+            repopulate(sort_widget)
         end
         if refresh then refresh() end
     end
@@ -284,12 +303,12 @@ install_submenu_tap_handlers = function(sort_widget)
                     if item.callback then
                         item:callback()
                     end
-                    row.show_parent:_populateItems()
+                    repopulate(row.show_parent)
                     return true
                 end
                 if item.hold_callback then
                     item:hold_callback(function()
-                        row.show_parent:_populateItems()
+                        repopulate(row.show_parent)
                     end)
                 end
                 return true
@@ -310,18 +329,18 @@ install_root_tap_handlers = function(sort_widget)
                     if item.callback then
                         item:callback()
                     end
-                    row.show_parent:_populateItems()
+                    repopulate(row.show_parent)
                     return true
                 end
                 if row.show_parent.marked == row.index then
                     if item.hold_callback then
                         item:hold_callback(function()
-                            row.show_parent:_populateItems()
+                            repopulate(row.show_parent)
                         end)
                     end
                 else
                     row.show_parent.marked = row.index
-                    row.show_parent:_populateItems()
+                    repopulate(row.show_parent)
                 end
                 return true
             end

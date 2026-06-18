@@ -3,6 +3,14 @@ local M = {}
 M.DEFAULT_PRESET_NAME = "Zen Default"
 M.CUSTOM_PRESET_NAME = "Custom preset"
 
+local function featured_text_styles()
+    return {
+        title = { font_face = "default", font_size = 11, bold = true },
+        author = { font_face = "default", font_size = 9, bold = false },
+        description = { font_face = "default", font_size = 16, bold = false },
+    }
+end
+
 local DEFAULT_HOME_PAGE = {
     title = M.DEFAULT_PRESET_NAME,
     rows = {
@@ -65,6 +73,7 @@ local DEFAULT_HOME_PAGE = {
             show_status_bar = false,
             status_bar_bold_text = true,
             status_bar_show_bottom_border = true,
+            text_styles = featured_text_styles(),
         },
         featured_recent = {
             interactive = true,
@@ -78,6 +87,7 @@ local DEFAULT_HOME_PAGE = {
             show_status_bar = false,
             status_bar_bold_text = true,
             status_bar_show_bottom_border = true,
+            text_styles = featured_text_styles(),
         },
         featured_tbr = {
             interactive = true,
@@ -91,6 +101,7 @@ local DEFAULT_HOME_PAGE = {
             show_status_bar = false,
             status_bar_bold_text = true,
             status_bar_show_bottom_border = true,
+            text_styles = featured_text_styles(),
         },
         quotes = {
             show_module_title = false,
@@ -193,6 +204,7 @@ local BOOKSHELF_HOME_PAGE = {
             show_status_bar = false,
             status_bar_bold_text = true,
             status_bar_show_bottom_border = true,
+            text_styles = featured_text_styles(),
         },
         featured_recent = {
             interactive = true,
@@ -206,6 +218,7 @@ local BOOKSHELF_HOME_PAGE = {
             show_status_bar = true,
             status_bar_bold_text = true,
             status_bar_show_bottom_border = true,
+            text_styles = featured_text_styles(),
         },
         featured_tbr = {
             interactive = true,
@@ -219,6 +232,7 @@ local BOOKSHELF_HOME_PAGE = {
             show_status_bar = false,
             status_bar_bold_text = true,
             status_bar_show_bottom_border = true,
+            text_styles = featured_text_styles(),
         },
         quotes = {
             show_module_title = false,
