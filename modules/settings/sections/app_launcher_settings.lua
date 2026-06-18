@@ -223,7 +223,7 @@ function M.build(ctx)
     local function add_items(folder)
         return {
             {
-                text = _("Add dispatcher action"),
+                text = _("Add action"),
                 keep_menu_open = true,
                 callback = function(touch_menu)
                     local entry = add_action(folder)
@@ -231,7 +231,7 @@ function M.build(ctx)
                 end,
             },
             {
-                text = _("Add plugin menu"),
+                text = _("Add plugin"),
                 keep_menu_open = true,
                 callback = function(touch_menu)
                     add_plugin(folder, touch_menu)
@@ -487,7 +487,7 @@ function M.build(ctx)
     }
 
     return {
-        text = _("App Launcher"),
+        text = _("Launcher"),
         sub_item_table = root_items,
     }
 end

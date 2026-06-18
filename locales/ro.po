@@ -90,6 +90,9 @@ msgstr "Subliniere filă activă"
 msgid "Add book"
 msgstr "Adaugă carte"
 
+msgid "Add buttons"
+msgstr "Adaugă butoane"
+
 msgid "Add catalog"
 msgstr "Adaugă catalog"
 
@@ -959,6 +962,9 @@ msgstr "Stânga"
 
 msgid "Left items"
 msgstr "Elemente stânga"
+
+msgid "Launcher"
+msgstr "Lansator"
 
 msgid "Library"
 msgstr "Bibliotecă"

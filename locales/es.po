@@ -90,6 +90,9 @@ msgstr "Subrayado de pestaña activa"
 msgid "Add book"
 msgstr "Añadir libro"
 
+msgid "Add buttons"
+msgstr "Añadir botones"
+
 msgid "Add catalog"
 msgstr "Añadir catálogo"
 
@@ -959,6 +962,9 @@ msgstr "Izquierda"
 
 msgid "Left items"
 msgstr "Elementos izquierdos"
+
+msgid "Launcher"
+msgstr "Lanzador"
 
 msgid "Library"
 msgstr "Biblioteca"

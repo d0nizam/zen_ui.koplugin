@@ -19,6 +19,7 @@ local function apply_app_launcher()
     local Dispatcher = require("dispatcher")
     local Model = require("modules/menu/app_launcher/model")
     local PluginScan = require("modules/menu/app_launcher/plugin_scan")
+    local ZenButton = require("common/ui/zen_button")
     local utils = require("common/utils")
     local library_font = require("modules/filebrowser/patches/library_font")
 
@@ -50,6 +51,7 @@ local function apply_app_launcher()
     end
 
     local LauncherCell = InputContainer:extend{}
+    local EmptyActionButton = InputContainer:extend{}
 
     function LauncherCell:init()
         self.dimen = self.dimen or Geom:new{ w = self.width, h = self.height }
@@ -81,6 +83,43 @@ local function apply_app_launcher()
 
     function LauncherCell:onUnfocus()
         self.frame.invert = false
+        if self.dimen then UIManager:setDirty(nil, "fast", self.dimen) end
+        return true
+    end
+
+    function EmptyActionButton:init()
+        self.dimen = self.dimen or Geom:new{ w = self.width, h = self.height }
+        self.ges_events = {
+            TapSelect = {
+                GestureRange:new{ ges = "tap", range = self.dimen },
+            },
+        }
+    end
+
+    function EmptyActionButton:paintTo(bb, x, y)
+        self.dimen.x = x
+        self.dimen.y = y
+        ZenButton.paintFilled(bb, x, y, self.width, self.height, self.text, self.font_size, self.radius)
+        if self.invert then
+            bb:invertRect(x, y, self.width, self.height)
+        end
+    end
+
+    function EmptyActionButton:onTapSelect()
+        if self.callback then
+            self.callback()
+        end
+        return true
+    end
+
+    function EmptyActionButton:onFocus()
+        self.invert = true
+        if self.dimen then UIManager:setDirty(nil, "fast", self.dimen) end
+        return true
+    end
+
+    function EmptyActionButton:onUnfocus()
+        self.invert = false
         if self.dimen then UIManager:setDirty(nil, "fast", self.dimen) end
         return true
     end
@@ -148,6 +187,53 @@ local function apply_app_launcher()
     local function show_unavailable()
         local InfoMessage = require("ui/widget/infomessage")
         UIManager:show(InfoMessage:new{ text = _("Launcher entry is unavailable") })
+    end
+
+    local function find_app_launcher_settings_item(root_items)
+        for _i, item in ipairs(root_items or {}) do
+            if item._zen_settings_root == "launcher" then
+                return item
+            end
+        end
+    end
+
+    local function open_app_launcher_settings(touch_menu)
+        if not (touch_menu and type(touch_menu.updateItems) == "function") then
+            return
+        end
+        local zen_tab_idx, zen_tab
+        for i, tab in ipairs(touch_menu.tab_item_table or {}) do
+            if tab.id == "zen_ui" then
+                zen_tab_idx = i
+                zen_tab = tab
+                break
+            end
+        end
+        if type(zen_tab) ~= "table" then
+            return
+        end
+        touch_menu._zen_panel_refs = nil
+        touch_menu._zen_panel_locked = false
+        if touch_menu.bar and type(touch_menu.bar.switchToTab) == "function" and zen_tab_idx then
+            touch_menu.bar:switchToTab(zen_tab_idx)
+        elseif type(touch_menu.switchMenuTab) == "function" and zen_tab_idx then
+            touch_menu:switchMenuTab(zen_tab_idx)
+        else
+            touch_menu.item_table = zen_tab
+        end
+        local root_items = type(touch_menu.item_table) == "table"
+            and touch_menu.item_table.id == "zen_ui"
+            and touch_menu.item_table
+            or zen_tab
+        local settings_item = find_app_launcher_settings_item(root_items)
+        if not settings_item or type(settings_item.sub_item_table) ~= "table" then
+            return
+        end
+        touch_menu.item_table_stack = touch_menu.item_table_stack or {}
+        table.insert(touch_menu.item_table_stack, root_items)
+        touch_menu.parent_id = nil
+        touch_menu.item_table = settings_item.sub_item_table
+        touch_menu:updateItems(1)
     end
 
     local function activate_entry(touch_menu, entry)
@@ -254,20 +340,40 @@ local function apply_app_launcher()
         end
 
         if #visible == 0 then
+            local button_w = math.min(inner_w, Screen:scaleBySize(190))
+            local button_h = Screen:scaleBySize(46)
+            local add_button = EmptyActionButton:new{
+                width = button_w,
+                height = button_h,
+                dimen = Geom:new{ w = button_w, h = button_h },
+                text = _("Add buttons"),
+                font_size = Font.sizemap and Font.sizemap["smallinfofont"] or 22,
+                radius = Screen:scaleBySize(10),
+                callback = function()
+                    open_app_launcher_settings(touch_menu)
+                end,
+            }
+            layout_rows[#layout_rows + 1] = { add_button }
+            refs.buttons[#refs.buttons + 1] = {
+                widget = add_button,
+                callback = function()
+                    add_button.callback()
+                end,
+            }
             touch_menu._zen_panel_refs = refs
             return VerticalGroup:new{
                 align = "center",
                 VerticalSpan:new{ width = Screen:scaleBySize(16) },
                 TextWidget:new{
-                    text = _("App Launcher"),
+                    text = _("Launcher"),
                     face = library_font.getFace(Font.sizemap and Font.sizemap["smallinfofont"] or 22),
                 },
-                VerticalSpan:new{ width = Screen:scaleBySize(8) },
-                TextWidget:new{
-                    text = _("No entries yet"),
-                    face = label_face,
+                VerticalSpan:new{ width = Screen:scaleBySize(12) },
+                CenterContainer:new{
+                    dimen = Geom:new{ w = panel_width, h = button_h },
+                    add_button,
                 },
-                VerticalSpan:new{ width = Screen:scaleBySize(16) },
+                VerticalSpan:new{ width = Screen:scaleBySize(20) },
             }
         end
 

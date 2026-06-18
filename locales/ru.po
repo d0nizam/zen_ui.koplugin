@@ -90,6 +90,9 @@ msgstr "Подчёркивание активной вкладки"
 msgid "Add book"
 msgstr "Добавить книгу"
 
+msgid "Add buttons"
+msgstr "Добавить кнопки"
+
 msgid "Add catalog"
 msgstr "Добавить каталог"
 
@@ -959,6 +962,9 @@ msgstr "Слева"
 
 msgid "Left items"
 msgstr "Левые элементы"
+
+msgid "Launcher"
+msgstr "Запуск"
 
 msgid "Library"
 msgstr "Библиотека"

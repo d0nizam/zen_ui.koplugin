@@ -90,6 +90,9 @@ msgstr "Sottolineatura scheda attiva"
 msgid "Add book"
 msgstr "Aggiungi libro"
 
+msgid "Add buttons"
+msgstr "Aggiungi pulsanti"
+
 msgid "Add catalog"
 msgstr "Aggiungi catalogo"
 
@@ -959,6 +962,9 @@ msgstr "Sinistra"
 
 msgid "Left items"
 msgstr "Elementi a sinistra"
+
+msgid "Launcher"
+msgstr "Launcher"
 
 msgid "Library"
 msgstr "Libreria"

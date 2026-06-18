@@ -90,6 +90,9 @@ msgstr "Active tab underline"
 msgid "Add book"
 msgstr "Add book"
 
+msgid "Add buttons"
+msgstr "Add buttons"
+
 msgid "Add catalog"
 msgstr "Add catalog"
 
@@ -959,6 +962,9 @@ msgstr "Left"
 
 msgid "Left items"
 msgstr "Left items"
+
+msgid "Launcher"
+msgstr "Launcher"
 
 msgid "Library"
 msgstr "Library"

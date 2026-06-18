@@ -90,6 +90,9 @@ msgstr "活动标签下划线"
 msgid "Add book"
 msgstr "添加图书"
 
+msgid "Add buttons"
+msgstr "添加按钮"
+
 msgid "Add catalog"
 msgstr "添加目录"
 
@@ -959,6 +962,9 @@ msgstr "左侧"
 
 msgid "Left items"
 msgstr "左侧项目"
+
+msgid "Launcher"
+msgstr "启动器"
 
 msgid "Library"
 msgstr "书库"

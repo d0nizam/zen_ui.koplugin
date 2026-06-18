@@ -90,6 +90,9 @@ msgstr "Sublinhado do separador ativo"
 msgid "Add book"
 msgstr "Adicionar livro"
 
+msgid "Add buttons"
+msgstr "Adicionar botões"
+
 msgid "Add catalog"
 msgstr "Adicionar catálogo"
 
@@ -959,6 +962,9 @@ msgstr "Esquerda"
 
 msgid "Left items"
 msgstr "Itens à esquerda"
+
+msgid "Launcher"
+msgstr "Iniciador"
 
 msgid "Library"
 msgstr "Biblioteca"

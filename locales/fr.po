@@ -90,6 +90,9 @@ msgstr "Soulignement de l'onglet actif"
 msgid "Add book"
 msgstr "Ajouter un livre"
 
+msgid "Add buttons"
+msgstr "Ajouter des boutons"
+
 msgid "Add catalog"
 msgstr "Ajouter un catalogue"
 
@@ -959,6 +962,9 @@ msgstr "Gauche"
 
 msgid "Left items"
 msgstr "Éléments de gauche"
+
+msgid "Launcher"
+msgstr "Lanceur"
 
 msgid "Library"
 msgstr "Bibliothèque"

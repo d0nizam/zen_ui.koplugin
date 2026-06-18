@@ -90,6 +90,9 @@ msgstr "Onderstreping actief tabblad"
 msgid "Add book"
 msgstr "Boek toevoegen"
 
+msgid "Add buttons"
+msgstr "Knoppen toevoegen"
+
 msgid "Add catalog"
 msgstr "Catalogus toevoegen"
 
@@ -959,6 +962,9 @@ msgstr "Links"
 
 msgid "Left items"
 msgstr "Linker items"
+
+msgid "Launcher"
+msgstr "Launcher"
 
 msgid "Library"
 msgstr "Bibliotheek"
