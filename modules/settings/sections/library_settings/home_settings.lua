@@ -1498,6 +1498,17 @@ function M.build(ctx)
                 sub_item_table_func = build_preset_items,
             },
             {
+                text = _("Show top status bar"),
+                checked_func = function()
+                    return dcfg.show_status_bar ~= false
+                end,
+                callback = function()
+                    dcfg.show_status_bar = dcfg.show_status_bar == false
+                    save_home("reinit")
+                end,
+            },
+            --[[
+            {
                 text = _("Settings"),
                 sub_item_table = {
                     {
@@ -1558,6 +1569,7 @@ function M.build(ctx)
                     },
                 },
             },
+            ]]
         },
     }
 end

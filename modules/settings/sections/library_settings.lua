@@ -648,15 +648,16 @@ function M.build(ctx)
         })
     end
 
-    table.insert(items, {
+    local display_mode_item = {
         text = _("Display mode"),
         sub_item_table = display_mode_sub_items,
-    })
+    }
 
     -- -------------------------------------------------------------------------
     -- Items per page
     -- -------------------------------------------------------------------------
 
+    local items_per_page_item
     do
         local function get_bim()
             local ok, bim = pcall(require, "bookinfomanager")
@@ -672,7 +673,7 @@ function M.build(ctx)
             return fm and fm.file_chooser or nil
         end
 
-        table.insert(items, {
+        items_per_page_item = {
             text = _("Items per page"),
             sub_item_table = {
                 {
@@ -830,49 +831,7 @@ function M.build(ctx)
                     end,
                 },
             },
-        })
-    end
-
-    -- -------------------------------------------------------------------------
-    -- Sort by
-    -- -------------------------------------------------------------------------
-
-    local collate_options = {
-        { key = "strcoll",                text = _("name")                                          },
-        { key = "natural",                text = _("name (natural sorting)")                        },
-        { key = "access",                 text = _("last read date")                                },
-        { key = "date",                   text = _("date modified")                                 },
-        { key = "size",                   text = _("size")                                          },
-        { key = "type",                   text = _("type")                                          },
-        { key = "percent_unopened_first", text = _("percent - unopened first")                      },
-        { key = "percent_unopened_last",  text = _("percent - unopened last")                       },
-        { key = "percent_natural",        text = _("percent - unopened - finished last")            },
-        { key = "title",                  text = _("Title")                                         },
-        { key = "title_natural",          text = _("Title natural")                                   },
-        { key = "authors",                text = _("Authors")                                       },
-        { key = "series",                 text = _("Series")                                        },
-        { key = "keywords",               text = _("Keywords"),        separator = true             },
-    }
-
-    local function get_current_collate()
-        return G_reader_settings:readSetting("collate") or "strcoll"
-    end
-
-    local function apply_sort_by(collate_id)
-        local ok, FileManager = pcall(require, "apps/filemanager/filemanager")
-        local fm = ok and FileManager and FileManager.instance
-        if fm then
-            if type(fm.onSetSortBy) == "function" then
-                pcall(fm.onSetSortBy, fm, collate_id)
-            elseif fm.file_chooser and type(fm.file_chooser.refreshPath) == "function" then
-                G_reader_settings:saveSetting("collate", collate_id)
-                pcall(fm.file_chooser.refreshPath, fm.file_chooser)
-            else
-                G_reader_settings:saveSetting("collate", collate_id)
-            end
-        else
-            G_reader_settings:saveSetting("collate", collate_id)
-        end
+        }
     end
 
     local function refresh_filechooser()
@@ -882,46 +841,6 @@ function M.build(ctx)
             pcall(fm.file_chooser.refreshPath, fm.file_chooser)
         end
     end
-
-    local collate_sub_items = {}
-    for _i, option in ipairs(collate_options) do
-        table.insert(collate_sub_items, {
-            text = option.text,
-            checked_func = function() return get_current_collate() == option.key end,
-            radio = true,
-            callback = function() apply_sort_by(option.key) end,
-        })
-    end
-    table.insert(collate_sub_items, {
-        text = _("Reverse sorting"),
-        checked_func = function() return G_reader_settings:isTrue("reverse_collate") end,
-        callback = function()
-            G_reader_settings:flipNilOrFalse("reverse_collate")
-            refresh_filechooser()
-        end,
-    })
-    table.insert(collate_sub_items, {
-        text = _("Folders and files mixed"),
-        checked_func = function() return G_reader_settings:isTrue("collate_mixed") end,
-        callback = function()
-            G_reader_settings:flipNilOrFalse("collate_mixed")
-            refresh_filechooser()
-        end,
-    })
-
-    table.insert(items, {
-        text = _("Sort by"),
-        text_func = function()
-            local collate = get_current_collate()
-            for _i, option in ipairs(collate_options) do
-                if option.key == collate then
-                    return _("Sort by: ") .. option.text
-                end
-            end
-            return _("Sort by")
-        end,
-        sub_item_table = collate_sub_items,
-    })
 
     -- -------------------------------------------------------------------------
     -- Scroll bar style
@@ -934,7 +853,7 @@ function M.build(ctx)
     }
 
     local function get_scroll_bar_style()
-        return (type(config.zen_scroll_bar) == "table" and config.zen_scroll_bar.style) or "bar"
+        return (type(config.zen_scroll_bar) == "table" and config.zen_scroll_bar.style) or "page_number"
     end
 
     local scroll_bar_sub_items = {}
@@ -1016,48 +935,54 @@ function M.build(ctx)
     })
 
     table.insert(items, {
-        text = _("Scroll bar style"),
+        text = _("Scroll bar"),
         sub_item_table = scroll_bar_sub_items,
     })
 
     -- -------------------------------------------------------------------------
-    -- Misc toggles
+    -- Layout
     -- -------------------------------------------------------------------------
 
-    table.insert(items, {
-        text = _("Show item underline"),
-        checked_func = function()
-            return config.features.browser_hide_underline ~= true
-        end,
-        callback = function()
-            config.features.browser_hide_underline = config.features.browser_hide_underline ~= true
-            save_and_apply("browser_hide_underline")
-        end,
-    })
-
-    table.insert(items, {
-        text = _("Hide list borders"),
-        checked_func = function()
-            return type(config.browser_list_item_layout) == "table"
-                and config.browser_list_item_layout.hide_list_borders == true
-        end,
-        callback = function()
-            if type(config.browser_list_item_layout) ~= "table" then
-                config.browser_list_item_layout = {}
-            end
-            config.browser_list_item_layout.hide_list_borders =
-                config.browser_list_item_layout.hide_list_borders ~= true
-            plugin:saveConfig()
-            -- updateItems rebuilds item_group so stripListBorders takes effect immediately.
-            local ok_fm, FM = pcall(require, "apps/filemanager/filemanager")
-            local fm = ok_fm and FM and FM.instance
-            if fm and fm.file_chooser and fm.file_chooser.updateItems then
-                fm.file_chooser:updateItems()
-                UIManager:setDirty(fm, "ui")
-            else
-                UIManager:setDirty(nil, "full")
-            end
-        end,
+    table.insert(items, 2, {
+        text = _("Layout"),
+        sub_item_table = {
+            display_mode_item,
+            items_per_page_item,
+            {
+                text = _("Show item underline"),
+                checked_func = function()
+                    return config.features.browser_hide_underline ~= true
+                end,
+                callback = function()
+                    config.features.browser_hide_underline = config.features.browser_hide_underline ~= true
+                    save_and_apply("browser_hide_underline")
+                end,
+            },
+            {
+                text = _("Hide list borders"),
+                checked_func = function()
+                    return type(config.browser_list_item_layout) == "table"
+                        and config.browser_list_item_layout.hide_list_borders == true
+                end,
+                callback = function()
+                    if type(config.browser_list_item_layout) ~= "table" then
+                        config.browser_list_item_layout = {}
+                    end
+                    config.browser_list_item_layout.hide_list_borders =
+                        config.browser_list_item_layout.hide_list_borders ~= true
+                    plugin:saveConfig()
+                    -- updateItems rebuilds item_group so stripListBorders takes effect immediately.
+                    local ok_fm, FM = pcall(require, "apps/filemanager/filemanager")
+                    local fm = ok_fm and FM and FM.instance
+                    if fm and fm.file_chooser and fm.file_chooser.updateItems then
+                        fm.file_chooser:updateItems()
+                        UIManager:setDirty(fm, "ui")
+                    else
+                        UIManager:setDirty(nil, "full")
+                    end
+                end,
+            },
+        },
     })
 
     table.insert(items, {
@@ -1155,7 +1080,7 @@ function M.build(ctx)
     })
 
     table.insert(items, {
-        text = _("Allow delete in context menu"),
+        text = _("Allow delete"),
         checked_func = function()
             return type(config.context_menu) == "table"
                 and config.context_menu.allow_delete == true

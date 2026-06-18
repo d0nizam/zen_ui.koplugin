@@ -98,6 +98,49 @@ function ZenUI:saveConfig()
     ConfigManager.save(self.config)
 end
 
+function ZenUI:onDispatcherRegisterActions()
+    local Dispatcher = require("dispatcher")
+    Dispatcher:registerAction("zen_ui_toggle_zen_mode", {
+        category = "none",
+        event = "ToggleZenMode",
+        title = _("Toggle Zen Mode"),
+        general = true,
+    })
+    Dispatcher:registerAction("zen_ui_toggle_lockdown_mode", {
+        category = "none",
+        event = "ToggleLockdownMode",
+        title = _("Toggle Lockdown Mode"),
+        general = true,
+    })
+end
+
+function ZenUI:onToggleZenMode()
+    local features = self.config and self.config.features
+    if type(features) ~= "table" then return false end
+    if features.lockdown_mode == true and features.zen_mode == true then
+        return true
+    end
+    features.zen_mode = not features.zen_mode
+    self:saveConfig()
+    require("modules/settings/zen_settings_apply").prompt_restart()
+    return true
+end
+
+function ZenUI:onToggleLockdownMode()
+    local features = self.config and self.config.features
+    if type(features) ~= "table" then return false end
+    local enabling = not features.lockdown_mode
+    features.lockdown_mode = enabling
+    if enabling then features.zen_mode = true end
+    local ok_lm, lockdown_mod = pcall(require, "modules/global/patches/lockdown_mode")
+    if ok_lm and type(lockdown_mod) == "table" then
+        lockdown_mod.apply_magnify_layout(self, enabling)
+    end
+    self:saveConfig()
+    require("modules/settings/zen_settings_apply").prompt_restart()
+    return true
+end
+
 local function is_enabled(config, path)
     if not path then
         return true
@@ -130,6 +173,7 @@ function ZenUI:init()
     self.config = ConfigManager.load()
     _G.__ZEN_UI_LIBRARY_FONT_CFG = self.config and self.config.library_font or nil
     _zen_plugin_ref = self
+    self:onDispatcherRegisterActions()
     -- Initialize updater state; release metadata stays live-only.
     zen_updater.init_banner()
 
@@ -415,6 +459,15 @@ function ZenUI:init()
         return qs_pos, table.remove(tab_table, qs_pos)
     end
 
+    local function take_tab_by_id(tab_table, id)
+        for i, tab in ipairs(tab_table) do
+            if tab.id == id then
+                return i, table.remove(tab_table, i)
+            end
+        end
+        return nil, nil
+    end
+
     local function zen_panel_hidden()
         local _cfg = _zen_plugin_ref and _zen_plugin_ref.config
         local _lc = _cfg and _cfg.lockdown
@@ -454,6 +507,12 @@ function ZenUI:init()
         return true
     end
 
+    local function app_launcher_enabled()
+        local _cfg = _zen_plugin_ref and _zen_plugin_ref.config
+        local _ft = _cfg and _cfg.features
+        return type(_ft) == "table" and _ft.app_launcher == true
+    end
+
     local function remove_zen_menu_tabs(m_self)
         for i = #m_self.tab_item_table, 1, -1 do
             local tab = m_self.tab_item_table[i]
@@ -465,6 +524,10 @@ function ZenUI:init()
 
     local function insert_zen_menu_tabs(m_self, panel_hidden)
         local qs_pos, qs_tab = take_quicksettings_tab(m_self.tab_item_table)
+        local app_tab = select(2, take_tab_by_id(m_self.tab_item_table, "app_launcher"))
+        if not app_launcher_enabled() then
+            app_tab = nil
+        end
         if qs_pos and not m_self._zen_qs_insert_pos then
             m_self._zen_qs_insert_pos = qs_pos
         end
@@ -475,6 +538,9 @@ function ZenUI:init()
             if not panel_hidden then
                 table.insert(m_self.tab_item_table, insert_pos + 1, m_self._zen_tab_item)
             end
+            if app_tab then
+                table.insert(m_self.tab_item_table, app_tab)
+            end
             if qs_tab then
                 -- Last tab is pushed to far-right by TouchMenuBar's stretch spacer.
                 table.insert(m_self.tab_item_table, qs_tab)
@@ -483,9 +549,13 @@ function ZenUI:init()
             if qs_tab then
                 table.insert(m_self.tab_item_table, insert_pos, qs_tab)
             end
+            local next_pos = qs_tab and (insert_pos + 1) or insert_pos
             if not panel_hidden then
-                table.insert(m_self.tab_item_table,
-                    qs_tab and (insert_pos + 1) or insert_pos, m_self._zen_tab_item)
+                table.insert(m_self.tab_item_table, next_pos, m_self._zen_tab_item)
+                next_pos = next_pos + 1
+            end
+            if app_tab then
+                table.insert(m_self.tab_item_table, next_pos, app_tab)
             end
             -- Last tab is pushed to far-right by TouchMenuBar's stretch spacer.
             table.insert(m_self.tab_item_table, m_self._zen_home_tab_item)

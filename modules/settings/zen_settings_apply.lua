@@ -11,6 +11,7 @@ local active_plugin
 local PATCH_MODULES = {
     navbar = "modules/filebrowser/patches/navbar",
     quick_settings = "modules/menu/patches/quick_settings",
+    app_launcher = "modules/menu/patches/app_launcher",
     zen_mode = "modules/menu/patches/zen_mode",
     status_bar = "modules/filebrowser/patches/status_bar",
     disable_top_menu_swipe_zones = "modules/menu/patches/disable_top_menu_swipe_zones",
@@ -30,6 +31,7 @@ local RESTART_REQUIRED = {
 local APPLY_MODE = {
     navbar = "filemanager_layout",
     quick_settings = "menu_refresh",
+    app_launcher = "menu_refresh",
     zen_mode = "menu_refresh",
     status_bar = "filemanager_reinit",
     disable_top_menu_swipe_zones = "menu_refresh",

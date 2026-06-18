@@ -293,7 +293,15 @@ show_submenu = function(title, items, refresh)
     end
 
     menu_proxy = {
+        item_table_stack = {},
         item_table = items,
+        backToUpperMenu = function()
+            if sort_widget then
+                UIManager:close(sort_widget)
+                sort_widget = nil
+            end
+            if refresh then refresh() end
+        end,
         updateItems = function(self)
             if type(self.item_table) == "table" then
                 items = self.item_table
@@ -385,7 +393,11 @@ install_root_tap_handlers = function(sort_widget)
                 if row.show_parent.marked == row.index then
                     if item.hold_callback then
                         item:hold_callback(function()
-                            repopulate(row.show_parent)
+                            if row.show_parent._zen_arrange_refresh then
+                                row.show_parent:_zen_arrange_refresh()
+                            else
+                                row.show_parent:_populateItems()
+                            end
                         end)
                     end
                 else
@@ -409,6 +421,18 @@ function M.show(opts)
         item_table = item_table,
         callback = opts.callback,
     }
+    sort_widget._zen_arrange_refresh = function(self)
+        if type(opts.refresh_func) == "function" then
+            local refreshed = opts.refresh_func()
+            if type(refreshed) == "table" then
+                item_table = refreshed
+                self.item_table = item_table
+                ensure_submenu_callbacks(item_table)
+                update_dynamic_text(item_table)
+            end
+        end
+        self:_populateItems()
+    end
 
     local orig_on_press = sort_widget.onPress
     sort_widget.onPress = function(self)

@@ -3,18 +3,24 @@ local UIManager = require("ui/uimanager")
 
 local settings_apply = require("modules/settings/zen_settings_apply")
 local updater        = require("modules/settings/zen_updater")
+local icons          = require("common/inline_icon_map")
 local utils          = require("modules/settings/zen_settings_utils")
 
 local lib_section      = require("modules/settings/sections/library_settings")
 local home_section = require("modules/settings/sections/library_settings/home_settings")
 local navbar_section   = require("modules/settings/sections/library_settings/navbar_settings")
 local menu_section     = require("modules/settings/sections/menu_settings")
+local app_launcher_section = require("modules/settings/sections/app_launcher_settings")
 local reader_section   = require("modules/settings/sections/reader_settings")
 local global_section   = require("modules/settings/sections/global_settings")
 local advanced_section = require("modules/settings/sections/advanced_settings")
 local about_section    = require("modules/settings/sections/about_settings")
 
 local M = {}
+
+local function icon_label(icon, label)
+    return icon .. "  " .. label
+end
 
 function M.build(plugin)
     -- Initialize updater banner state; release metadata stays live-only.
@@ -47,6 +53,7 @@ function M.build(plugin)
     local home_item       = home_section.build(ctx)
     local navbar_item          = navbar_section.build(ctx)
     local quick_settings_item  = menu_section.build(ctx)
+    local app_launcher_item = app_launcher_section.build(ctx)
     local reader_items         = reader_section.build(ctx)
     local global_items      = global_section.build(ctx)
     local advanced_items    = advanced_section.build(ctx)
@@ -114,28 +121,23 @@ function M.build(plugin)
     -- Root menu assembly
     -- -------------------------------------------------------------------------
 
-    home_item.text = _("Home")
+    quick_settings_item.text = icons.settings_quick .. "\u{2009}\u{2009}" .. _("Quick Settings")
+    app_launcher_item.text = icon_label(icons.settings_launcher, _("Launcher"))
+    app_launcher_item._zen_settings_root = "launcher"
+    home_item.text = icon_label(icons.settings_home, _("Home"))
+    navbar_item.text = icon_label(icons.settings_navbar, _("Navbar"))
 
     local root_items = {
-        {
-            text = _("Zen Mode"),
-            checked_func = function()
-                return config.features["zen_mode"] == true
-            end,
-            callback = function()
-                config.features["zen_mode"] = config.features["zen_mode"] ~= true
-                save_and_apply("zen_mode")
-            end,
-        },
         quick_settings_item,
-        { text = _("Library"),  sub_item_table = filebrowser_items },
+        app_launcher_item,
         home_item,
+        { text = icon_label(icons.settings_library, _("Library")), sub_item_table = filebrowser_items },
         navbar_item,
-        { text = _("Reader"),   sub_item_table = reader_items      },
-        { text = _("Global"),   sub_item_table = global_items      },
-        { text = _("Advanced"), sub_item_table = advanced_items    },
+        { text = icon_label(icons.settings_reader, _("Reader")), sub_item_table = reader_items },
+        { text = icon_label(icons.settings_global, _("Global")), sub_item_table = global_items },
+        { text = icon_label(icons.settings_advanced, _("Advanced")), sub_item_table = advanced_items },
         {
-            text = _("About"),
+            text = icon_label(icons.settings_about, _("About")),
             sub_item_table = general_items,
         },
     }
