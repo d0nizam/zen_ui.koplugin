@@ -1739,6 +1739,15 @@ function M.showHomeView(injectNavbar)
         end
     end
 
+    local function refresh_home_clock_widgets_if_top()
+        local stack = UIManager._window_stack
+        local top = stack and stack[#stack]
+        if not top or top.widget ~= menu then return end
+        if menu._zen_home_refresh_clock_widgets then
+            menu:_zen_home_refresh_clock_widgets()
+        end
+    end
+
     if show_status_bar then
         local status_refresh = menu._zen_status_refresh
         menu._zen_status_refresh = function(self, ...)
@@ -1761,6 +1770,19 @@ function M.showHomeView(injectNavbar)
                 end
             end)
         end)
+    end
+
+    if not show_status_bar and has_clock_refreshers then
+        local orig_onResume = menu.onResume
+        function menu:onResume(...)
+            local result
+            if orig_onResume then
+                result = orig_onResume(self, ...)
+            end
+            UIManager:scheduleIn(0.5, refresh_home_clock_widgets_if_top)
+            UIManager:scheduleIn(1.5, refresh_home_clock_widgets_if_top)
+            return result
+        end
     end
 
     function menu:_home_rebuild(refresh_stats, reload_config)
