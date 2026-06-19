@@ -1,6 +1,5 @@
 local _ = require("gettext")
 local UIManager = require("ui/uimanager")
-local ConfigManager = require("config/manager")
 
 local HomePresets = require("modules/filebrowser/patches/home/home_presets")
 local PresetStore = require("config/preset_store")
@@ -146,12 +145,7 @@ local function ensure_strip_cfg(dcfg, module_id)
         if mcfg.count < 3 then mcfg.count = 3 end
         if mcfg.count > 5 then mcfg.count = 5 end
     end
-    if mcfg.show_strip_titles == nil then
-        local cfg = ConfigManager.get()
-        mcfg.show_strip_titles = type(cfg) == "table"
-            and type(cfg.mosaic_title_strip) == "table"
-            and cfg.mosaic_title_strip.show_title == true
-    end
+    if mcfg.show_strip_titles == nil then mcfg.show_strip_titles = false end
     if mcfg.show_badges == nil then mcfg.show_badges = false end
     return mcfg
 end
@@ -319,11 +313,6 @@ function M.build(ctx)
         local name = unique_user_preset_name(editable_name_for_builtin(preset_name))
         dcfg.active_preset = name
         dcfg.title = name
-        if type(config) == "table"
-                and type(config.mosaic_title_strip) == "table"
-                and config.mosaic_title_strip.show_title == true then
-            HomePresets.applyMosaicTitlesToStrips(dcfg, true)
-        end
         local state = HomePresets.captureHomePage(dcfg)
         state.title = name
         PresetStore.save("home", name, state)

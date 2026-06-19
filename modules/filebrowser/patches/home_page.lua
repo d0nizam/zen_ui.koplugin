@@ -174,12 +174,7 @@ local function ensure_strip_module_cfg(dcfg, module_id)
         if mcfg.count < 3 then mcfg.count = 3 end
         if mcfg.count > 5 then mcfg.count = 5 end
     end
-    if mcfg.show_strip_titles == nil then
-        local cfg = ConfigManager.get()
-        mcfg.show_strip_titles = type(cfg) == "table"
-            and type(cfg.mosaic_title_strip) == "table"
-            and cfg.mosaic_title_strip.show_title == true
-    end
+    if mcfg.show_strip_titles == nil then mcfg.show_strip_titles = false end
     return mcfg
 end
 
@@ -206,13 +201,6 @@ local function load_zen_config()
     if ok and type(cfg) == "table" then
         return cfg
     end
-end
-
-local function mosaic_titles_enabled()
-    local cfg = load_zen_config()
-    return type(cfg) == "table"
-        and type(cfg.mosaic_title_strip) == "table"
-        and cfg.mosaic_title_strip.show_title == true
 end
 
 local function unique_user_preset_name(base)
@@ -306,22 +294,6 @@ local function ensure_home_cfg()
         ensure_module_cfg(dcfg, comp.id)
     end
     ensure_home_widget_cfg(dcfg)
-
-    -- When the active preset is still a builtin (e.g. first load of the default),
-    -- derive an editable custom preset so the mosaic "Show title below cover"
-    -- setting can drive strip book titles. Builtins pin show_strip_titles=false,
-    -- so the value only takes effect on a persisted user copy.
-    if HomePresets.isBuiltinPresetName(dcfg.active_preset) and mosaic_titles_enabled() then
-        HomePresets.applyMosaicTitlesToStrips(dcfg, true)
-        local name = unique_user_preset_name(editable_name_for_builtin(dcfg.active_preset))
-        dcfg.active_preset = name
-        dcfg.title = name
-        local state = HomePresets.captureHomePage(dcfg)
-        state.title = name
-        PresetStore.save("home", name, state)
-        PresetStore.setActivePreset("home", name)
-        PresetStore.saveSettings("home", dcfg)
-    end
 
     return dcfg
 end

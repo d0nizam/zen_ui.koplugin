@@ -5,6 +5,7 @@
 local _ = require("gettext")
 local T = require("ffi/util").template
 local UIManager = require("ui/uimanager")
+local defaults = require("config/defaults")
 
 local M = {}
 
@@ -378,6 +379,19 @@ function M.build(ctx)
         return items
     end
 
+    -- Reset only the enable/disable state of built-in options to defaults.
+    -- Custom buttons and their enabled states are preserved.
+    local function resetQuickSettings()
+        local def = defaults.quick_settings
+        for key, val in pairs(def.show_buttons) do
+            config.quick_settings.show_buttons[key] = val
+        end
+        config.quick_settings.show_frontlight = def.show_frontlight
+        config.quick_settings.show_warmth = def.show_warmth
+        config.quick_settings.flip_lh_rh_icon = def.flip_lh_rh_icon
+        save_and_apply_quick_settings()
+    end
+
     local custom_buttons_item = {
         text = _("Custom buttons"),
         separator = true,
@@ -482,6 +496,22 @@ function M.build(ctx)
                 callback = function()
                     config.quick_settings.flip_lh_rh_icon = config.quick_settings.flip_lh_rh_icon ~= true
                     save_and_apply_quick_settings()
+                end,
+            },
+            {
+                text = _("Reset to defaults"),
+                separator = true,
+                keep_menu_open = true,
+                callback = function(touch_menu)
+                    local ConfirmBox = require("ui/widget/confirmbox")
+                    UIManager:show(ConfirmBox:new{
+                        text = _("Reset quick settings to defaults?\n\nThis restores the default enabled options. Custom buttons are kept."),
+                        ok_text = _("Reset"),
+                        ok_callback = function()
+                            resetQuickSettings()
+                            if touch_menu and touch_menu.updateItems then touch_menu:updateItems() end
+                        end,
+                    })
                 end,
             },
         },

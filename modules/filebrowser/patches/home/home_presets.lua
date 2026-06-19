@@ -28,13 +28,13 @@ local DEFAULT_HOME_PAGE = {
             "quotes",
         },
         enabled = {
-            datetime = true,
+            datetime = false,
             featured_custom = false,
             featured_recent = true,
             featured_tbr = false,
             quotes = true,
             reading_goals = false,
-            stats_triplet = false,
+            stats_triplet = true,
             strip_custom = false,
             strip_recent = true,
             strip_tbr = false,
@@ -55,7 +55,7 @@ local DEFAULT_HOME_PAGE = {
         weekly_target = 210,
         weekly_time_target_min = 210,
     },
-    show_status_bar = true,
+    show_status_bar = false,
     modules = {
         datetime = {
             show_module_title = false,
@@ -84,7 +84,7 @@ local DEFAULT_HOME_PAGE = {
             },
             show_description = true,
             show_module_title = false,
-            show_status_bar = false,
+            show_status_bar = true,
             status_bar_bold_text = true,
             status_bar_show_bottom_border = true,
             text_styles = featured_text_styles(),
@@ -118,22 +118,28 @@ local DEFAULT_HOME_PAGE = {
             interactive = true,
             order = "default",
             paths = {},
+            show_badges = false,
             show_module_title = false,
             show_strip_titles = false,
+            two_rows = false,
         },
         strip_recent = {
             count = 4,
             interactive = true,
             order = "default",
+            show_badges = false,
             show_module_title = false,
             show_strip_titles = false,
+            two_rows = false,
         },
         strip_tbr = {
             count = 4,
             interactive = true,
             order = "default",
+            show_badges = false,
             show_module_title = false,
             show_strip_titles = false,
+            two_rows = false,
         },
     },
     quotes = {
@@ -351,8 +357,9 @@ end
 local STRIP_MODULE_IDS = { "strip_recent", "strip_custom", "strip_tbr" }
 
 -- Mirror the library "Show title below cover (mosaic)" setting onto the strip
--- widgets' show_strip_titles. Builtin presets pin show_strip_titles=false, so a
--- preset derived from a builtin only picks up titles when this runs at derivation.
+-- widgets' show_strip_titles. Only used for the one-time first-startup seed;
+-- afterwards strip titles are user-owned and the mosaic setting no longer drives
+-- them.
 function M.applyMosaicTitlesToStrips(dcfg, show_titles)
     if type(dcfg) ~= "table" or type(dcfg.modules) ~= "table" then return end
     for _i, id in ipairs(STRIP_MODULE_IDS) do

@@ -595,6 +595,23 @@ local function migrate_changed_defaults(cfg)
         changed = true
     end
 
+    -- One-time seed of home strip book titles from the mosaic "Show title below
+    -- cover" setting. After this runs once, strip titles are user-owned and the
+    -- mosaic setting no longer overrides them.
+    if cfg._meta.home_strip_titles_seeded ~= true then
+        local show = type(cfg.mosaic_title_strip) == "table"
+            and cfg.mosaic_title_strip.show_title == true
+        if show then
+            local dcfg = PresetStore.getSettings("home")
+            if type(dcfg) == "table" and next(dcfg) ~= nil then
+                HomePresets.applyMosaicTitlesToStrips(dcfg, true)
+                PresetStore.saveSettings("home", dcfg)
+            end
+        end
+        cfg._meta.home_strip_titles_seeded = true
+        changed = true
+    end
+
     return cfg, changed
 end
 

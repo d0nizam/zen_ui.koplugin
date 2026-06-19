@@ -81,7 +81,7 @@ return {
             author_widget = TextWidget:new{
                 text = "\226\128\148 " .. quote.author,
                 face = author_face,
-                fgcolor = Blitbuffer.COLOR_GRAY_3,
+                fgcolor = Blitbuffer.COLOR_BLACK,
             }
         end
         local author_size = author_widget and author_widget:getSize() or nil
