@@ -38,10 +38,14 @@ local function install_broadcast_guard()
     local orig_broadcastEvent = UIManager.broadcastEvent
     UIManager.broadcastEvent = function(self, event, ...)
         local prev = in_broadcast
+        local args = { n = select("#", ...), ... }
+        local ret
         in_broadcast = true
-        local ok, ret = pcall(orig_broadcastEvent, self, event, ...)
+        local ok, err = xpcall(function()
+            ret = orig_broadcastEvent(self, event, unpack(args, 1, args.n))
+        end, debug.traceback)
         in_broadcast = prev
-        if not ok then error(ret) end
+        if not ok then error(err, 0) end
         return ret
     end
 end

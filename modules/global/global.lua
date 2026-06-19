@@ -8,6 +8,7 @@ local PATCH_MODULES = {
     disable_night_on_exit  = "modules/global/patches/disable_night_on_exit",
     menu_top_swipe         = "modules/global/patches/menu_top_swipe",
     opds                   = "modules/global/patches/opds",
+    kindle_network_profile_guard = "modules/global/patches/kindle_network_profile_guard",
     lockdown_mode          = "modules/global/patches/lockdown_mode",
     menu_font              = "modules/global/patches/menu_font",
 }
@@ -69,6 +70,11 @@ function M.init(logger, plugin)
         run_patch(logger, plugin, "opds", opds_fn)
     end
 
+    local kindle_network_profile_guard_fn = load_patch("kindle_network_profile_guard")
+    if kindle_network_profile_guard_fn then
+        run_patch(logger, plugin, "kindle_network_profile_guard", kindle_network_profile_guard_fn)
+    end
+
     -- Lockdown mode runs last so it wraps any reader-layer patches (e.g. margin_hold_guard).
     local lockdown_mode_fn = load_patch("lockdown_mode")
     if lockdown_mode_fn then
@@ -93,7 +99,7 @@ function M.init(logger, plugin)
         local orig_afterResume = Device._afterResume
         Device._afterResume = function(self, ...)
             local result = orig_afterResume(self, ...)
-            for _, name in ipairs(SCHEDULE_STATES) do
+            for _i, name in ipairs(SCHEDULE_STATES) do
                 local state = rawget(_G, name)
                 if type(state) == "table" then
                     local fn = state.force_reschedule or state.reschedule
@@ -107,7 +113,7 @@ function M.init(logger, plugin)
     if type(Device._beforeSuspend) == "function" then
         local orig_beforeSuspend = Device._beforeSuspend
         Device._beforeSuspend = function(self, ...)
-            for _, name in ipairs(SCHEDULE_STATES) do
+            for _i, name in ipairs(SCHEDULE_STATES) do
                 local state = rawget(_G, name)
                 if type(state) == "table" and type(state._on_suspend) == "function" then
                     pcall(state._on_suspend)

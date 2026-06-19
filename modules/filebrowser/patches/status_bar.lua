@@ -473,8 +473,19 @@ local function apply_status_bar()
             local Button = require("ui/widget/button")
             local ffiUtil = require("ffi/util")
             back_callback = function()
+                local file_chooser = file_manager and file_manager.file_chooser
+                local item_table = file_chooser and file_chooser.item_table
+                if item_table and item_table.is_in_series_view and file_chooser.onFolderUp then
+                    UIManager:scheduleIn(0.1, function()
+                        if file_manager.file_chooser then
+                            file_manager.file_chooser:onFolderUp()
+                        end
+                    end)
+                    return
+                end
+
                 local parent = ffiUtil.dirname(path)
-                if file_manager and file_manager.file_chooser and parent then
+                if file_chooser and parent then
                     -- Defer the path change to avoid button dimen crash during feedback highlight
                     UIManager:scheduleIn(0.1, function()
                         if file_manager.file_chooser then
