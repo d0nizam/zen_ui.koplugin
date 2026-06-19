@@ -10,6 +10,7 @@ local function default_config()
     return {
         entries = {},
         next_id = 0,
+        show_labels = true,
     }
 end
 
@@ -28,6 +29,7 @@ local function normalize(cfg)
     if type(cfg) ~= "table" then cfg = {} end
     if type(cfg.entries) ~= "table" then cfg.entries = {} end
     if type(cfg.next_id) ~= "number" then cfg.next_id = 0 end
+    if type(cfg.show_labels) ~= "boolean" then cfg.show_labels = true end
     return cfg
 end
 

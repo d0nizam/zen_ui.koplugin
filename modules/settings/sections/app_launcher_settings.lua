@@ -468,6 +468,19 @@ function M.build(ctx)
             end,
         },
         {
+            text = _("Show labels"),
+            checked_func = function()
+                return cfg.show_labels ~= false
+            end,
+            callback = function(touch_menu)
+                cfg.show_labels = cfg.show_labels == false
+                save_app_launcher()
+                if touch_menu and touch_menu.updateItems then
+                    touch_menu:updateItems(1)
+                end
+            end,
+        },
+        {
             text = _("Buttons") .. " \u{25B8}",
             separator = true,
             keep_menu_open = true,

@@ -129,6 +129,7 @@ local function apply_app_launcher()
         local icon_size = opts.icon_size
         local label_face = opts.label_face
         local fg = opts.dim and Blitbuffer.COLOR_DARK_GRAY or Blitbuffer.COLOR_BLACK
+        local show_label = opts.show_label ~= false
         local icon = IconWidget:new{
             file = icon_path or nil,
             icon = icon_path and nil or icon_name,
@@ -136,19 +137,22 @@ local function apply_app_launcher()
             height = icon_size,
             alpha = true,
         }
-        local label = TextWidget:new{
-            text = opts.label,
-            face = label_face,
-            fgcolor = fg,
-            max_width = opts.cell_w - opts.pad * 2,
-        }
-        local content = VerticalGroup:new{
+        local content_items = {
             align = "center",
-            VerticalSpan:new{ width = opts.pad },
             icon,
-            VerticalSpan:new{ width = Screen:scaleBySize(4) },
-            label,
         }
+        if show_label then
+            local label = TextWidget:new{
+                text = opts.label,
+                face = label_face,
+                fgcolor = fg,
+                max_width = opts.cell_w - opts.pad * 2,
+            }
+            table.insert(content_items, 1, VerticalSpan:new{ width = opts.pad })
+            content_items[#content_items + 1] = VerticalSpan:new{ width = Screen:scaleBySize(4) }
+            content_items[#content_items + 1] = label
+        end
+        local content = VerticalGroup:new(content_items)
         local frame = FrameContainer:new{
             width = opts.cell_w,
             height = opts.cell_h,
@@ -280,6 +284,8 @@ local function apply_app_launcher()
 
     local function create_panel(touch_menu)
         local entries, folder = current_entries(touch_menu)
+        local cfg = Model.ensure(zen_plugin.config)
+        local show_labels = cfg.show_labels ~= false
         local panel_width = touch_menu.item_width
         local pad = Screen:scaleBySize(8)
         local inner_w = panel_width - pad * 2
@@ -399,6 +405,7 @@ local function apply_app_launcher()
                 icon_size = icon_size,
                 label_face = label_face,
                 label = Model.display_label(entry),
+                show_label = show_labels,
                 icon = entry.icon or (entry.type == "folder" and DEFAULT_FOLDER_ICON or DEFAULT_ENTRY_ICON),
                 dim = dim,
                 callback = not dim and function()
