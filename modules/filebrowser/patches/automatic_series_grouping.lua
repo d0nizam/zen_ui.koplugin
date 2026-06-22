@@ -405,6 +405,15 @@ local function apply_automatic_series_grouping()
         if hide_up_folder then
             file_chooser:_changeLeftIcon(Icon.up, function() file_chooser:onFolderUp() end)
         end
+
+        -- Entering a series view does not change file_chooser.path, so the zen
+        -- status bar's onPathChanged hook never fires. Refresh it directly so the
+        -- back chevron appears for the virtual folder.
+        local FileManager = require("apps/filemanager/filemanager")
+        local fm = FileManager.instance
+        if fm and fm._updateStatusBar then
+            fm:_updateStatusBar()
+        end
     end
 
     local function exit_virtual_folder_if_needed(file_chooser)
@@ -420,6 +429,19 @@ local function apply_automatic_series_grouping()
         end
         return false
     end
+
+    -- Exposed so the navbar Library tab can leave a virtual series folder cleanly.
+    -- Clears current_series_group so a following changeToPath/refreshPath won't
+    -- re-open the group. Does NOT navigate; the caller decides the destination.
+    -- Returns the parent path, or nil when not in a series view.
+    rawset(_G, "__ZEN_SERIES_EXIT", function(file_chooser)
+        if file_chooser and file_chooser.item_table and file_chooser.item_table.is_in_series_view then
+            current_series_group = nil
+            file_chooser.item_table.is_in_series_view = false
+            return file_chooser.item_table.parent_path
+        end
+        return nil
+    end)
 
     local old_setSubTitle = TitleBar.setSubTitle
     TitleBar.setSubTitle = function(self, subtitle, no_refresh)
@@ -468,7 +490,10 @@ local function apply_automatic_series_grouping()
             return
         end
         old_refreshPath(file_chooser)
-        if current_series_group then
+        -- Only re-open the series view for an in-place refresh (e.g. returning
+        -- from the reader). When should_restore_focus is set we are exiting the
+        -- virtual folder, so re-opening would trap the user inside it.
+        if current_series_group and not current_series_group.should_restore_focus then
             local series_name = current_series_group.series_name
             for _i, item in ipairs(file_chooser.item_table) do
                 if item.is_series_group and item.text == series_name then

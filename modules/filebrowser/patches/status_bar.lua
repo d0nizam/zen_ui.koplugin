@@ -454,6 +454,16 @@ local function apply_status_bar()
             end
         end
 
+        -- Virtual series folders keep file_chooser.path at the parent dir, so the
+        -- subfolder check above misses them. Treat being in a series view as a
+        -- subfolder so the back chevron always shows and can exit the group.
+        local item_table = file_manager and file_manager.file_chooser
+            and file_manager.file_chooser.item_table
+        local in_series_view = item_table and item_table.is_in_series_view == true
+        if in_series_view then
+            in_subfolder = true
+        end
+
         -- Respect KOReader's "Lock home folder" setting; zen mode always treats home as locked
         local is_zen_mode = zen_plugin.config
             and type(zen_plugin.config.features) == "table"

@@ -352,6 +352,17 @@ local function apply_navbar()
         if not (fm and fm.file_chooser) then return false end
         local fc = fm.file_chooser
         utils.closeWidgetsAbove(fm)
+        -- If inside a virtual series folder, exit it first. path is unchanged in
+        -- series view, so without this the home-root branch below would refreshPath
+        -- and immediately re-open the series group, trapping the user.
+        local series_exit = rawget(_G, "__ZEN_SERIES_EXIT")
+        if fc.item_table and fc.item_table.is_in_series_view and series_exit then
+            series_exit(fc)
+            fc.path_items[home_dir] = 1
+            fc._zen_lib_mtime_snapshot = _build_dir_mtime_snapshot(home_dir, LIB_SNAPSHOT_DEPTH)
+            fc:changeToPath(home_dir)
+            return
+        end
         if fc.path == home_dir then
             -- Already in the library root. Always jump to page 1, and clear the
             -- item-table cache if the tree changed since last check so new books
