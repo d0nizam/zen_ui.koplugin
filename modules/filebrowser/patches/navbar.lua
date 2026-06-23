@@ -2501,6 +2501,13 @@ local function apply_navbar()
     -- Expose a reinject function for external callers (e.g. quickstart on_close).
     -- Allows main.lua to rebuild the navbar after quickstart changes tab config.
     _G.__ZEN_UI_NAVBAR_OPEN_DEFAULT_TAB = open_default_tab
+    _G.__ZEN_UI_NAVBAR_OPEN_HOME = function()
+        if shouldTrackActiveTab("home") then
+            setActiveTab("home")
+        end
+        runTabCallback("home")
+        return true
+    end
     _G.__ZEN_UI_NAVBAR_RESOLVE_DEFAULT_TAB = resolve_default_tab
 
     _G.__ZEN_UI_REINJECT_FM_NAVBAR = function()

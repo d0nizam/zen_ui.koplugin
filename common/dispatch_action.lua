@@ -20,6 +20,28 @@ local function refresh_reader()
     end
 end
 
+local function show_home_from_filemanager(plugin)
+    local ok_fm, FileManager = pcall(require, "apps/filemanager/filemanager")
+    local fm = ok_fm and FileManager and FileManager.instance
+    if fm then
+        require("common/utils").closeWidgetsAbove(fm)
+    end
+
+    local open_home = rawget(_G, "__ZEN_UI_NAVBAR_OPEN_HOME")
+    if type(open_home) == "function" then
+        return open_home() ~= false
+    end
+
+    local ok_shared, SharedState = pcall(require, "common/shared_state")
+    local home = ok_shared and SharedState.get(plugin, "home") or nil
+    if not (home and type(home.showHomeView) == "function") then
+        return false
+    end
+
+    home.showHomeView()
+    return true
+end
+
 local function apply_top_status_bar(plugin, enabled)
     local apply = require("modules/settings/zen_settings_apply")
     apply.apply_feature_toggle(plugin, "reader_top_status_bar", enabled)
@@ -127,6 +149,12 @@ function M.onDispatcherRegisterActions()
         title = _("Zen UI - Toggle reader status bars"),
         reader = true,
     })
+    Dispatcher:registerAction("zen_ui_show_home", {
+        category = "none",
+        event = "ShowZenUIHome",
+        title = _("Zen UI - Home"),
+        general = true,
+    })
 end
 
 function M.onToggleZenMode(plugin)
@@ -171,6 +199,20 @@ function M.onToggleReaderStatusBars(plugin)
     return top_ok or bottom_ok
 end
 
+function M.onShowZenUIHome(plugin)
+    local reader = get_reader()
+    if reader and reader.document then
+        local shown = require("common/library_navigation").showFromReader(reader, plugin)
+        if shown then
+            require("ui/uimanager"):scheduleIn(0, function()
+                show_home_from_filemanager(plugin)
+            end)
+        end
+        return shown
+    end
+    return show_home_from_filemanager(plugin)
+end
+
 function M.install(target)
     target.onDispatcherRegisterActions = M.onDispatcherRegisterActions
     target.onToggleZenMode = M.onToggleZenMode
@@ -178,6 +220,7 @@ function M.install(target)
     target.onToggleReaderTopStatusBar = M.onToggleReaderTopStatusBar
     target.onToggleReaderBottomStatusBar = M.onToggleReaderBottomStatusBar
     target.onToggleReaderStatusBars = M.onToggleReaderStatusBars
+    target.onShowZenUIHome = M.onShowZenUIHome
 end
 
 return M
