@@ -21,6 +21,12 @@ local function refresh_reader()
 end
 
 local function show_home_from_filemanager(plugin)
+    local ok_shared, SharedState = pcall(require, "common/shared_state")
+    local home = ok_shared and SharedState.get(plugin, "home") or nil
+    if home and type(home.isActiveOnTop) == "function" and home.isActiveOnTop() then
+        return true
+    end
+
     local ok_fm, FileManager = pcall(require, "apps/filemanager/filemanager")
     local fm = ok_fm and FileManager and FileManager.instance
     if fm then
@@ -32,8 +38,6 @@ local function show_home_from_filemanager(plugin)
         return open_home() ~= false
     end
 
-    local ok_shared, SharedState = pcall(require, "common/shared_state")
-    local home = ok_shared and SharedState.get(plugin, "home") or nil
     if not (home and type(home.showHomeView) == "function") then
         return false
     end
@@ -202,7 +206,7 @@ end
 function M.onShowZenUIHome(plugin)
     local reader = get_reader()
     if reader and reader.document then
-        local shown = require("common/library_navigation").showFromReader(reader, plugin)
+        local shown = require("common/library_navigation").showFromReader(reader, plugin, { open_home = true })
         if shown then
             require("ui/uimanager"):scheduleIn(0, function()
                 show_home_from_filemanager(plugin)

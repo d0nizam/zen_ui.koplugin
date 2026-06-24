@@ -62,6 +62,14 @@ local _zen_plugin_ref = nil
 -- so the on_update_found callback can rebuild their tab_item_table dynamically.
 local _zen_menu_instances = setmetatable({}, { __mode = "k" })
 
+local function refresh_home_date_dependent(plugin)
+    local ok_shared, SharedState = pcall(require, "common/shared_state")
+    local home = ok_shared and SharedState.get(plugin, "home") or nil
+    if home and type(home.refreshDateDependentActive) == "function" then
+        home.refreshDateDependentActive()
+    end
+end
+
 local function build_update_changelog_scroll_text(items)
     if type(items) ~= "table" or #items == 0 then return nil end
     local lines = { _("What's New"), "" }
@@ -640,6 +648,13 @@ end
 -- Also called from init() so a fresh KOReader start triggers the same check.
 function ZenUI:onResume()
     zen_updater.schedule_wakeup_check()
+    local UIManager = require("ui/uimanager")
+    UIManager:scheduleIn(0.5, function()
+        refresh_home_date_dependent(self)
+    end)
+    UIManager:scheduleIn(1.5, function()
+        refresh_home_date_dependent(self)
+    end)
 end
 
 -- On suspend: cancel the pending timer so checks don't run while asleep.

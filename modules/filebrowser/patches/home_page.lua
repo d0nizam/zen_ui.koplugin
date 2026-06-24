@@ -2073,6 +2073,19 @@ function M.rebuildActive()
     return false
 end
 
+function M.refreshDateDependentActive()
+    if not (M.isActiveOnTop() and _home_menu and _home_menu._home_rebuild) then
+        return false
+    end
+    local cfg = load_zen_config()
+    local dcfg = type(cfg) == "table" and ensure_home_cfg() or nil
+    if not dcfg or not rows_have_date_dependent(resolve_rows(dcfg)) then
+        return false
+    end
+    _home_menu:_home_rebuild(true)
+    return true
+end
+
 function M.hasActive()
     return _home_menu ~= nil
 end

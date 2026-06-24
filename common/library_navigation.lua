@@ -29,10 +29,11 @@ function M.returnToRakuyomiReader(restore)
     return true
 end
 
-function M.showFromReader(ui, plugin)
+function M.showFromReader(ui, plugin, opts)
     if not ui or not ui.document then return false end
 
     local file = ui.document.file
+    local open_home = type(opts) == "table" and opts.open_home == true
     local restore = M.restoreEnabled(plugin)
     local outside_home = file and not paths.isInHomeDir(file)
     _G.__ZEN_UI_LAST_READ_FILE = file
@@ -45,10 +46,11 @@ function M.showFromReader(ui, plugin)
 
     ui:onClose()
     if type(ui.showFileManager) == "function" then
-        if not restore and not outside_home then
+        if open_home then
+            _G.__ZEN_UI_OPEN_HOME_AFTER_FILEMANAGER = true
+        elseif not restore and not outside_home then
             _G.__ZEN_UI_FORCE_DEFAULT_LIBRARY_TAB = true
-        end
-        if outside_home then
+        elseif outside_home then
             _G.__ZEN_UI_KEEP_BOOK_LOCATION = true
         end
         ui:showFileManager(file)

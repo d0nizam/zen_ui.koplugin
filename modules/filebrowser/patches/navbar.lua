@@ -763,6 +763,14 @@ local function apply_navbar()
         return tab_id
     end
 
+    local function open_home_tab()
+        if shouldTrackActiveTab("home") then
+            setActiveTab("home")
+        end
+        runTabCallback("home")
+        return true
+    end
+
     do
         local default_tab = resolve_default_tab()
         active_tab = shouldTrackActiveTab(default_tab) and default_tab or "books"
@@ -822,7 +830,7 @@ local function apply_navbar()
     end
 
     -- === Colored icon widget ===
-    -- Invert icon bitmap so colored pixels get full coverage, then restore.
+    -- Build a mask from the icon, then color-blit through it.
 
     local ColorIconWidget = IconWidget:extend{
         _tint_color = nil,
@@ -842,13 +850,38 @@ local function apply_navbar()
             self.dimen.x = x
             self.dimen.y = y
         end
-        self._bb:invert()
-        bb:colorblitFromRGB32(
-            self._bb, x, y,
-            self._offset_x, self._offset_y,
-            size.w, size.h,
-            self._tint_color)
-        self._bb:invert()
+        if not self._tint_mask
+                or self._tint_mask:getWidth() ~= size.w
+                or self._tint_mask:getHeight() ~= size.h then
+            if self._tint_mask then
+                self._tint_mask:free()
+            end
+            self._tint_mask = Blitbuffer.new(size.w, size.h, Blitbuffer.TYPE_BB8)
+        end
+        local mask = self._tint_mask
+        mask:fill(Blitbuffer.COLOR_WHITE)
+
+        local bbtype = self._bb:getType()
+        if self.alpha == true
+                and (bbtype == Blitbuffer.TYPE_BB8A or bbtype == Blitbuffer.TYPE_BBRGB32) then
+            if self._is_straight_alpha then
+                mask:alphablitFrom(self._bb, 0, 0, self._offset_x, self._offset_y, size.w, size.h)
+            else
+                mask:pmulalphablitFrom(self._bb, 0, 0, self._offset_x, self._offset_y, size.w, size.h)
+            end
+        else
+            mask:blitFrom(self._bb, 0, 0, self._offset_x, self._offset_y, size.w, size.h)
+        end
+        mask:invertRect(0, 0, size.w, size.h)
+        bb:colorblitFromRGB32(mask, x, y, 0, 0, size.w, size.h, self._tint_color)
+    end
+
+    function ColorIconWidget:free()
+        if self._tint_mask then
+            self._tint_mask:free()
+            self._tint_mask = nil
+        end
+        return IconWidget.free(self)
     end
 
     -- === Build a single tab (visual only) ===
@@ -2220,10 +2253,13 @@ local function apply_navbar()
     end
 
     function FileManager:showFiles(path, focused_file, selected_files)
+        local open_home_after_filemanager = rawget(_G, "__ZEN_UI_OPEN_HOME_AFTER_FILEMANAGER") == true
+        _G.__ZEN_UI_OPEN_HOME_AFTER_FILEMANAGER = nil
         local keep_book_location = rawget(_G, "__ZEN_UI_KEEP_BOOK_LOCATION") == true
         _G.__ZEN_UI_KEEP_BOOK_LOCATION = nil
         local restore_enabled = is_restore_enabled()
-        local forced_default_tab = rawget(_G, "__ZEN_UI_FORCE_DEFAULT_LIBRARY_TAB") == true
+        local forced_default_tab = not open_home_after_filemanager
+            and rawget(_G, "__ZEN_UI_FORCE_DEFAULT_LIBRARY_TAB") == true
             and resolve_default_tab() or nil
         local state_before_show = rawget(_G, "__ZEN_UI_LIBRARY_STATE")
         local default_tab = forced_default_tab or resolve_default_tab()
@@ -2239,6 +2275,7 @@ local function apply_navbar()
             end
         end
         local hidden_bootstrap = (forced_default_tab and forced_default_tab ~= "books")
+            or open_home_after_filemanager
             or (not restore_enabled
                 and not keep_book_location
                 and default_tab ~= "books")
@@ -2256,6 +2293,12 @@ local function apply_navbar()
         end
         if suppress_initial_covers and self.file_chooser then
             self.file_chooser._zen_needs_cover_refresh = true
+        end
+        if open_home_after_filemanager then
+            _G.__ZEN_UI_FORCE_DEFAULT_LIBRARY_TAB = nil
+            _G.__ZEN_UI_LIBRARY_STATE = nil
+            withBgTabRefreshSuppressed(open_home_tab)
+            return
         end
         if rawget(_G, "__ZEN_UI_FORCE_DEFAULT_LIBRARY_TAB") then
             _G.__ZEN_UI_FORCE_DEFAULT_LIBRARY_TAB = nil
@@ -2501,13 +2544,7 @@ local function apply_navbar()
     -- Expose a reinject function for external callers (e.g. quickstart on_close).
     -- Allows main.lua to rebuild the navbar after quickstart changes tab config.
     _G.__ZEN_UI_NAVBAR_OPEN_DEFAULT_TAB = open_default_tab
-    _G.__ZEN_UI_NAVBAR_OPEN_HOME = function()
-        if shouldTrackActiveTab("home") then
-            setActiveTab("home")
-        end
-        runTabCallback("home")
-        return true
-    end
+    _G.__ZEN_UI_NAVBAR_OPEN_HOME = open_home_tab
     _G.__ZEN_UI_NAVBAR_RESOLVE_DEFAULT_TAB = resolve_default_tab
 
     _G.__ZEN_UI_REINJECT_FM_NAVBAR = function()
