@@ -107,6 +107,7 @@ local function apply_quick_settings()
         show_frontlight = true,
         show_warmth = true,
         rotate_action = "cycle",
+        screenshot_timer_seconds = 3,
         custom_buttons = {},  -- array of { id, label, icon, action }
         next_custom_id = 0,
     }
@@ -247,6 +248,27 @@ local function apply_quick_settings()
     local function showUnavailable()
         local InfoMessage = require("ui/widget/infomessage")
         UIManager:show(InfoMessage:new{ text = _("Quick settings button is unavailable") })
+    end
+
+    local function getScreenshotTimerSeconds()
+        local seconds = tonumber(config.screenshot_timer_seconds) or 3
+        return math.max(0, math.min(10, math.floor(seconds)))
+    end
+
+    local function showScreenshotTimerDialog(touch_menu)
+        local SpinWidget = require("ui/widget/spinwidget")
+        UIManager:show(SpinWidget:new{
+            title_text = _("Screenshot timer"),
+            value = getScreenshotTimerSeconds(),
+            value_min = 0,
+            value_max = 10,
+            default_value = 3,
+            callback = function(spin)
+                config.screenshot_timer_seconds = spin.value
+                zen_plugin:saveConfig()
+                if touch_menu and touch_menu.updateItems then touch_menu:updateItems(1) end
+            end,
+        })
     end
 
     -- ============================================================
@@ -697,9 +719,10 @@ local function apply_quick_settings()
             callback = function(touch_menu)
                 touch_menu:closeMenu()
                 UIManager:scheduleIn(0.3, function()
-                    require("modules/menu/patches/countdown_screenshot").run()
+                    require("modules/menu/patches/countdown_screenshot").run(getScreenshotTimerSeconds())
                 end)
             end,
+            hold_callback = showScreenshotTimerDialog,
         },
         chess = {
             icon = "quick_chess",

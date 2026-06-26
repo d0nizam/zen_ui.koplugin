@@ -4,7 +4,7 @@
 -- taps/swipes pass through to the UI below.
 --
 -- Usage:
---   require("modules/menu/patches/countdown_screenshot").run()
+--   require("modules/menu/patches/countdown_screenshot").run(seconds)
 
 local BD               = require("ui/bidi")
 local Blitbuffer       = require("ffi/blitbuffer")
@@ -174,8 +174,10 @@ local function show_save_dialog(screenshot_name)
     UIManager:setDirty(nil, "full")
 end
 
--- Run the 3-2-1 countdown, take the screenshot, then show the save dialog.
-function M.run()
+-- Run the countdown, take the screenshot, then show the save dialog.
+function M.run(seconds)
+    seconds = tonumber(seconds) or 3
+    seconds = math.max(0, math.min(10, math.floor(seconds)))
     local current_bar
 
     local function close_bar()
@@ -218,11 +220,15 @@ function M.run()
         UIManager:scheduleIn(1, next_fn)
     end
 
-    show_count(3, function()
-        show_count(2, function()
-            show_count(1, do_shot)
-        end)
-    end)
+    local function step(n)
+        if n <= 0 then
+            do_shot()
+            return
+        end
+        show_count(n, function() step(n - 1) end)
+    end
+
+    step(seconds)
 end
 
 return M

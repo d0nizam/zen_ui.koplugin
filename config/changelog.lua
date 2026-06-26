@@ -106,6 +106,7 @@ return {
         "Added natural title sorting in context menu",
         "Added custom background (Library > Background)",
         "Added rotation options in Controls",
+        "Added customizable screenshot timer in Controls > Buttons > Screenshot",
         "Added actions for authors/series/tags/ tabs and folders",
         "Updated Settings menus",
         "Updated Controls to launch plugins",

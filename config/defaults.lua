@@ -129,6 +129,7 @@ local defaults = {
         show_warmth = true,
         flip_lh_rh_icon = false,
         rotate_action = "90",
+        screenshot_timer_seconds = 3,
     },
     status_bar = {
         custom_text = " ",

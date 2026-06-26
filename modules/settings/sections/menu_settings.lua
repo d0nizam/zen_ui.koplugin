@@ -114,6 +114,11 @@ function M.build(ctx)
         return rotate_action_labels[getRotateAction()]
     end
 
+    local function getScreenshotTimerSeconds()
+        local seconds = tonumber(config.quick_settings.screenshot_timer_seconds) or 3
+        return math.max(0, math.min(10, math.floor(seconds)))
+    end
+
     -- only count buttons that are actually toggleable in the UI
     local quick_button_key_set = {}
     for _i, item in ipairs(quick_button_items) do
@@ -165,6 +170,32 @@ function M.build(ctx)
             })
         end
         return items
+    end
+
+    local function buildScreenshotButtonSubItems()
+        return {
+            {
+                text_func = function()
+                    return T(_("Timer: %1 s"), getScreenshotTimerSeconds())
+                end,
+                keep_menu_open = true,
+                callback = function(touch_menu)
+                    local SpinWidget = require("ui/widget/spinwidget")
+                    UIManager:show(SpinWidget:new{
+                        title_text = _("Screenshot timer"),
+                        value = getScreenshotTimerSeconds(),
+                        value_min = 0,
+                        value_max = 10,
+                        default_value = 3,
+                        callback = function(spin)
+                            config.quick_settings.screenshot_timer_seconds = spin.value
+                            save_and_apply_quick_settings()
+                            if touch_menu and touch_menu.updateItems then touch_menu:updateItems() end
+                        end,
+                    })
+                end,
+            },
+        }
     end
 
     local function toggleQuickButton(id)
@@ -409,6 +440,12 @@ function M.build(ctx)
                         end
                         item.sub_title = _("Rotate")
                         item.sub_item_table_func = buildRotateButtonSubItems
+                    elseif id == "screenshot" then
+                        item.text_func = function()
+                            return T(_("Screenshot: %1 s"), getScreenshotTimerSeconds()) .. " \u{25B8}"
+                        end
+                        item.sub_title = _("Screenshot")
+                        item.sub_item_table_func = buildScreenshotButtonSubItems
                     elseif quick_button_custom_by_id[id] then
                         local cb = quick_button_custom_by_id[id]
                         item.text_func = function()
@@ -706,6 +743,7 @@ function M.build(ctx)
         config.quick_settings.show_frontlight = def.show_frontlight
         config.quick_settings.show_warmth = def.show_warmth
         config.quick_settings.flip_lh_rh_icon = def.flip_lh_rh_icon
+        config.quick_settings.screenshot_timer_seconds = def.screenshot_timer_seconds
         save_and_apply_quick_settings()
     end
 
