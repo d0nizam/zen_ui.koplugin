@@ -637,6 +637,7 @@ local function apply_reader_top_status_bar()
     ReaderView.paintTo = function(self, bb, x, y)
         _ReaderView_paintTo_orig(self, bb, x, y)
         if not is_enabled() then return end
+        if bb ~= Screen.bb then return end -- offscreen renders, e.g. page-browser thumbnails
         if self.render_mode ~= nil then return end -- pdf-like; skip
         if not self.document then return end
         -- Guard: don't paint when reader is not active (allow overlays that
