@@ -110,13 +110,12 @@ local function apply_cover_border(frame, rounded)
         -- For rounded corners we need the background that sits *behind* the
         -- cover so the corner cut-outs can reveal it. Snapshot the target rect
         -- before the cover paints over it.
-        local snap, snap_w, snap_h
+        local snap
         if rounded then
             local w, h = self:getSize().w, self:getSize().h
             if w and h and w > 0 and h > 0 then
                 snap = Blitbuffer.new(w, h, bb:getType())
                 snap:blitFrom(bb, 0, 0, x, y, w, h)
-                snap_w, snap_h = w, h
             end
         end
         orig_paintTo(self, bb, x, y)
