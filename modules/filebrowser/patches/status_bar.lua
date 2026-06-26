@@ -209,6 +209,39 @@ local function apply_status_bar()
     end
     local h_padding = Screen:scaleBySize(10)
 
+    -- Builds the far-left back chevron. KOReader's Button flattens its icon
+    -- against an opaque white tile at render time (IconWidget alpha=false), which
+    -- leaves a white box around the chevron when a library background is showing.
+    -- Force the icon to keep its alpha channel and drop the frame's white fill so
+    -- the background paints through.
+    local function makeBackButton(icon_size, callback)
+        local Button = require("ui/widget/button")
+        local back_widget = Button:new{
+            icon        = "chevron.left",
+            icon_width  = icon_size,
+            icon_height = icon_size,
+            bordersize  = 0,
+            padding     = 0,
+            callback    = callback or function() end,
+        }
+        local lw = back_widget.label_widget
+        if lw then
+            lw.alpha = true
+            lw:free()  -- drop the flattened (white-baked) bb so it re-renders with alpha
+        end
+        if back_widget.frame then
+            back_widget.frame.background = nil
+        end
+        -- KOReader's stock flash_ui feedback repaints the button through the
+        -- widget stack, filling the titlebar white (the library background is
+        -- only painted by our repaintTitleBar) and leaving a white/inverted box
+        -- around the transparent chevron. Drop the tap feedback entirely so the
+        -- background stays untouched.
+        back_widget._doFeedbackHighlight = function() end
+        back_widget._undoFeedbackHighlight = function() end
+        return back_widget
+    end
+
     -- Disk free space cache
     local cached_disk_text = nil
     local cached_disk_time = 0
@@ -481,7 +514,6 @@ local function apply_status_bar()
         local back_callback = nil
         local icon_size = Screen:scaleBySize(isUIMagnified() and 35 or 28)  -- 28 * 1.25 = 35
         if show_back then
-            local Button = require("ui/widget/button")
             local ffiUtil = require("ffi/util")
             back_callback = function()
                 local file_chooser = file_manager and file_manager.file_chooser
@@ -505,14 +537,7 @@ local function apply_status_bar()
                     end)
                 end
             end
-            back_widget = Button:new{
-                icon = "chevron.left",
-                icon_width = icon_size,
-                icon_height = icon_size,
-                bordersize = 0,
-                padding = 0,
-                callback = back_callback,
-            }
+            back_widget = makeBackButton(icon_size, back_callback)
         end
 
         local left_content  = _buildGroup(config.left_order   or {})
@@ -745,16 +770,8 @@ local function apply_status_bar()
     -- the collections list rather than navigating the filesystem.
     local function createStatusRowCustomBack(back_callback, title)
         local CenterContainer = require("ui/widget/container/centercontainer")
-        local Button = require("ui/widget/button")
         local icon_size = Screen:scaleBySize(isUIMagnified() and 35 or 28)
-        local back_widget = Button:new{
-            icon        = "chevron.left",
-            icon_width  = icon_size,
-            icon_height = icon_size,
-            bordersize  = 0,
-            padding     = 0,
-            callback    = back_callback or function() end,
-        }
+        local back_widget = makeBackButton(icon_size, back_callback)
         local left_content   = _buildGroup(config.left_order   or {})
         local right_content  = _buildGroup(config.right_order  or {})
 

@@ -41,13 +41,37 @@ M.isJpegPath = is_jpeg_path
 -- Native (unscaled) image dimensions, or nil on failure.
 local function native_size(path)
     if not ImageWidget then return nil end
-    local probe = ImageWidget:new{ file = path, scale_factor = 1 }
+    local probe = ImageWidget:new{ file = path, scale_factor = 1, file_do_cache = false }
     local ok = pcall(function() probe:getSize() end)
     local w = ok and probe._img_w or nil
     local h = ok and probe._img_h or nil
     pcall(function() probe:free() end)
     if w and h and w > 0 and h > 0 then return w, h end
     return nil
+end
+
+-- Validate that a path can be used as a background image. Returns (true) on
+-- success, or (false, reason_code) on failure. "Can be used" means: it's a
+-- JPG/JPEG, the file exists, and the decoder can read its size. The caller
+-- maps reason_code to a translated message.
+function M.validateImage(path)
+    if type(path) ~= "string" or path == "" then
+        return false, "none"
+    end
+    if not is_jpeg_path(path) then
+        return false, "not_jpeg"
+    end
+    if not file_exists(path) then
+        return false, "missing"
+    end
+    if not ImageWidget then
+        return false, "no_decoder"
+    end
+    local w, h = native_size(path)
+    if not w or not h then
+        return false, "decode_failed"
+    end
+    return true
 end
 
 -- Build (or fetch cached) a cover-fit ImageWidget for the given rect.
@@ -71,6 +95,7 @@ local function get_widget(path, w, h)
         scale_factor = scale,
         center_x_ratio = 0.5,
         center_y_ratio = 0.5,
+        file_do_cache = false,
     }
     _cache[key] = iw
     return iw
@@ -184,6 +209,7 @@ function M.renderToBuffer(path, w, h)
             scale_factor = scale,
             center_x_ratio = 0.5,
             center_y_ratio = 0.5,
+            file_do_cache = false,
         }
         iw:paintTo(out, 0, 0)
         iw:free()

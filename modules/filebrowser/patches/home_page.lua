@@ -1855,6 +1855,7 @@ function M.showHomeView(injectNavbar)
     end
 
     function menu:_zen_home_refresh_clock_widgets()
+        if self._zen_home_closing then return end
         local refreshed = 0
         for _i, refresh in ipairs(self._zen_home_clock_refreshers or {}) do
             if type(refresh) == "function" then
@@ -1872,6 +1873,7 @@ function M.showHomeView(injectNavbar)
     end
 
     local function refresh_home_clock_widgets_if_top()
+        if menu._zen_home_closing or not rawequal(_home_menu, menu) then return end
         local stack = UIManager._window_stack
         local top = stack and stack[#stack]
         if not top or top.widget ~= menu then return end
@@ -1884,6 +1886,7 @@ function M.showHomeView(injectNavbar)
     -- that crossed midnight. Force a stats re-query + rebuild when the home
     -- page is on top.
     local function refresh_home_date_dependent_if_top()
+        if menu._zen_home_closing or not rawequal(_home_menu, menu) then return end
         local stack = UIManager._window_stack
         local top = stack and stack[#stack]
         if not top or top.widget ~= menu then return end
@@ -1992,6 +1995,7 @@ function M.showHomeView(injectNavbar)
     end
 
     function menu:_home_rebuild(refresh_stats, reload_config)
+        if self._zen_home_closing then return end
         refresh_shared_state()
         if reload_config == true then
             local next_cfg = load_zen_config()
@@ -2008,12 +2012,17 @@ function M.showHomeView(injectNavbar)
     end
 
     menu.close_callback = function()
+        if menu._zen_home_closing then return end
+        menu._zen_home_closing = true
+        if rawequal(_home_menu, menu) then
+            _home_menu = nil
+        end
         UIManager:close(menu)
-        _home_menu = nil
     end
 
     local orig_onCloseWidget = menu.onCloseWidget
     function menu:onCloseWidget(...)
+        self._zen_home_closing = true
         if rawequal(_home_menu, self) then
             _home_menu = nil
         end
@@ -2063,8 +2072,10 @@ function M.rebuildActive()
                 or (not show_status_bar
                     and _home_menu._zen_home_has_clock_refreshers ~= has_clock_refreshers) then
             local UIManager = require("ui/uimanager")
-            UIManager:close(_home_menu)
+            local old_menu = _home_menu
             _home_menu = nil
+            old_menu._zen_home_closing = true
+            UIManager:close(old_menu)
             M.showHomeView(_home_inject_navbar)
             return true
         end
@@ -2100,10 +2111,14 @@ function M.isActiveOnTop()
 end
 
 function M.closeAll()
-    if _home_menu then
+    local menu = _home_menu
+    if menu then
         local UIManager = require("ui/uimanager")
-        UIManager:close(_home_menu)
         _home_menu = nil
+        if not menu._zen_home_closing then
+            menu._zen_home_closing = true
+            UIManager:close(menu)
+        end
     end
 end
 

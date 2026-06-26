@@ -1069,8 +1069,17 @@ function M.build(ctx)
         ensure_lib_bg().path = path or ""
         save_lib_bg()
     end
-    local function is_lib_bg_file(path)
-        return require("common/ui/background").isJpegPath(path)
+    local function lib_bg_error_text(code)
+        if code == "not_jpeg" then
+            return _("Background image must be a JPG or JPEG file.")
+        elseif code == "missing" then
+            return _("Background image file not found.")
+        elseif code == "no_decoder" then
+            return _("Image support is unavailable on this device.")
+        elseif code == "decode_failed" then
+            return _("Background image could not be loaded. It may be corrupt or unsupported.")
+        end
+        return _("No background image selected.")
     end
     local function lib_bg_start_path()
         local path = lib_bg_path()
@@ -1094,7 +1103,23 @@ function M.build(ctx)
                 end,
                 callback = function(touchmenu_instance)
                     local bg = ensure_lib_bg()
-                    bg.enabled = bg.enabled ~= true
+                    if bg.enabled ~= true then
+                        -- Enabling: only allow if the image actually works.
+                        local bg_mod = require("common/ui/background")
+                        local ok_img, reason = bg_mod.validateImage(bg.path)
+                        if not ok_img then
+                            bg.enabled = false
+                            local InfoMessage = require("ui/widget/infomessage")
+                            UIManager:show(InfoMessage:new{
+                                text = lib_bg_error_text(reason),
+                            })
+                            if touchmenu_instance then touchmenu_instance:updateItems() end
+                            return
+                        end
+                        bg.enabled = true
+                    else
+                        bg.enabled = false
+                    end
                     save_lib_bg()
                     if touchmenu_instance then touchmenu_instance:updateItems() end
                 end,
@@ -1116,10 +1141,12 @@ function M.build(ctx)
                         show_files = true,
                         path = lib_bg_start_path(),
                         onConfirm = function(file_path)
-                            if not is_lib_bg_file(file_path) then
+                            local bg_mod = require("common/ui/background")
+                            local ok_img, reason = bg_mod.validateImage(file_path)
+                            if not ok_img then
                                 local InfoMessage = require("ui/widget/infomessage")
                                 UIManager:show(InfoMessage:new{
-                                    text = _("Background image must be a JPG or JPEG file."),
+                                    text = lib_bg_error_text(reason),
                                 })
                                 return
                             end
