@@ -50,6 +50,8 @@ local function compare_right(a, b, ai, bi)
 end
 
 local function natord(a, b, ignore_case)
+    a = a or ""
+    b = b or ""
     local ai, bi = 1, 1
     local lenA, lenB = #a, #b
     local after_digit = false
