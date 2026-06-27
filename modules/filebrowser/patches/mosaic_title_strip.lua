@@ -221,7 +221,12 @@ local function apply_mosaic_title_strip()
                 local text_w   = strip_w - 2 * PAD_H
                 local strip_y  = y + self.height - STRIP_H
                 local strip_bb = Blitbuffer.new(strip_w, STRIP_H, bb:getType())
-                local bg_path = Background.library_path()
+                local _is_fm = self.menu and (
+                    self.menu.name == "filemanager"
+                    or self.menu.name == "history"
+                    or self.menu._zen_tab_id
+                    or self.menu._zen_coll_list)
+                local bg_path = _is_fm and Background.library_path() or ""
                 if bg_path == "" or not Background.paintScreenRegion(strip_bb, 0, 0,
                         x, strip_y, strip_w, STRIP_H, bg_path) then
                     strip_bb:fill(Blitbuffer.COLOR_WHITE)

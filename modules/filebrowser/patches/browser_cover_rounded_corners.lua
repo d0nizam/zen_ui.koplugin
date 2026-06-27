@@ -11,19 +11,20 @@ local function apply_browser_cover_rounded_corners()
     -- Capture plugin reference at apply-time.
     local _plugin = rawget(_G, "__ZEN_UI_PLUGIN")
 
-    -- Paint white pixels outside the arc in each corner zone.
-    local function paintCornerMasks(bb, tx, ty, tw, th, r)
-        local color = Blitbuffer.COLOR_WHITE
+    -- Restore corner pixels from a pre-paint background snapshot so the rounded
+    -- cut-outs reveal whatever was behind the cover (page or library bg image)
+    -- instead of an opaque white square. snap origin is absolute (ox, oy).
+    local function paintCornerMasks(bb, tx, ty, tw, th, r, snap, ox, oy)
         for j = 0, r - 1 do
             local inner = math.sqrt(r * r - (r - j) * (r - j))
             local cut   = math.ceil(r - inner)
             if cut > 0 then
                 -- top edge
-                bb:paintRect(tx,            ty + j,          cut, 1, color)
-                bb:paintRect(tx + tw - cut, ty + j,          cut, 1, color)
+                bb:blitFrom(snap, tx,            ty + j,          tx - ox,            ty + j - oy,          cut, 1)
+                bb:blitFrom(snap, tx + tw - cut, ty + j,          tx + tw - cut - ox, ty + j - oy,          cut, 1)
                 -- bottom edge
-                bb:paintRect(tx,            ty + th - 1 - j, cut, 1, color)
-                bb:paintRect(tx + tw - cut, ty + th - 1 - j, cut, 1, color)
+                bb:blitFrom(snap, tx,            ty + th - 1 - j, tx - ox,            ty + th - 1 - j - oy, cut, 1)
+                bb:blitFrom(snap, tx + tw - cut, ty + th - 1 - j, tx + tw - cut - ox, ty + th - 1 - j - oy, cut, 1)
             end
         end
     end
@@ -108,18 +109,32 @@ local function apply_browser_cover_rounded_corners()
         end
 
         function MosaicMenuItem:paintTo(bb, x, y)
-            -- 1. Full base painting (cover image + any previously applied overlays
+            -- 0. Check live config first so we only snapshot when the feature is on.
+            local plug = _plugin or rawget(_G, "__ZEN_UI_PLUGIN")
+            local enabled = plug
+                and type(plug.config) == "table"
+                and type(plug.config.features) == "table"
+                and plug.config.features.browser_cover_rounded_corners == true
+
+            -- 1. Snapshot the background behind this item *before* painting the
+            --    cover, so the corner cut-outs can reveal it (page or library bg
+            --    image) instead of an opaque white square.
+            local snap
+            if enabled then
+                local sz = self:getSize()
+                local w, h = sz and sz.w, sz and sz.h
+                if w and h and w > 0 and h > 0 then
+                    snap = Blitbuffer.new(w, h, bb:getType())
+                    snap:blitFrom(bb, 0, 0, x, y, w, h)
+                end
+            end
+
+            -- 2. Full base painting (cover image + any previously applied overlays
             --    such as the badge patch).
             orig_paintTo(self, bb, x, y)
 
-            -- 2. Runtime feature guard – check live config so toggling requires
-            --    only a repaint, not a restart.
-            local plug = _plugin or rawget(_G, "__ZEN_UI_PLUGIN")
-            if not (plug
-                and type(plug.config) == "table"
-                and type(plug.config.features) == "table"
-                and plug.config.features.browser_cover_rounded_corners == true)
-            then
+            if not enabled then
+                if snap then snap:free() end
                 return
             end
 
@@ -130,6 +145,7 @@ local function apply_browser_cover_rounded_corners()
                 and target.dimen.w and target.dimen.h
                 and target.dimen.w > 0 and target.dimen.h > 0)
             then
+                if snap then snap:free() end
                 return
             end
 
@@ -139,7 +155,10 @@ local function apply_browser_cover_rounded_corners()
             local tw, th = target.dimen.w, target.dimen.h
             local bsz    = math.max(1, target.bordersize or 0)
 
-            paintCornerMasks(bb, tx, ty, tw, th, corner_radius)
+            if snap then
+                paintCornerMasks(bb, tx, ty, tw, th, corner_radius, snap, x, y)
+                snap:free()
+            end
             paintCornerBorderArcs(bb, tx, ty, tw, th, corner_radius, bsz, Blitbuffer.COLOR_BLACK)
         end
     end

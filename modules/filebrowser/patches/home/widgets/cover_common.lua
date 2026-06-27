@@ -37,16 +37,18 @@ local function rounded_enabled()
         and cfg.features.browser_cover_rounded_corners == true
 end
 
-local function paint_corner_masks(bb, tx, ty, tw, th, r)
-    local color = Blitbuffer.COLOR_WHITE
+-- Restore the corner pixels from a pre-paint snapshot of the background so the
+-- rounded corners reveal whatever was behind the cover (page or library bg
+-- image) instead of an opaque white square. snap origin is (ox, oy) absolute.
+local function paint_corner_masks(bb, tx, ty, tw, th, r, snap, ox, oy)
     for j = 0, r - 1 do
         local inner = math.sqrt(r * r - (r - j) * (r - j))
         local cut = math.ceil(r - inner)
         if cut > 0 then
-            bb:paintRect(tx, ty + j, cut, 1, color)
-            bb:paintRect(tx + tw - cut, ty + j, cut, 1, color)
-            bb:paintRect(tx, ty + th - 1 - j, cut, 1, color)
-            bb:paintRect(tx + tw - cut, ty + th - 1 - j, cut, 1, color)
+            bb:blitFrom(snap, tx, ty + j, tx - ox, ty + j - oy, cut, 1)
+            bb:blitFrom(snap, tx + tw - cut, ty + j, tx + tw - cut - ox, ty + j - oy, cut, 1)
+            bb:blitFrom(snap, tx, ty + th - 1 - j, tx - ox, ty + th - 1 - j - oy, cut, 1)
+            bb:blitFrom(snap, tx + tw - cut, ty + th - 1 - j, tx + tw - cut - ox, ty + th - 1 - j - oy, cut, 1)
         end
     end
 end
@@ -105,9 +107,23 @@ local function apply_cover_border(frame, rounded)
     if type(orig_paintTo) ~= "function" then return end
     local base_radius = Screen:scaleBySize(8)
     frame.paintTo = function(self, bb, x, y)
+        -- For rounded corners we need the background that sits *behind* the
+        -- cover so the corner cut-outs can reveal it. Snapshot the target rect
+        -- before the cover paints over it.
+        local snap
+        if rounded then
+            local w, h = self:getSize().w, self:getSize().h
+            if w and h and w > 0 and h > 0 then
+                snap = Blitbuffer.new(w, h, bb:getType())
+                snap:blitFrom(bb, 0, 0, x, y, w, h)
+            end
+        end
         orig_paintTo(self, bb, x, y)
         local d = self.dimen
-        if not (d and d.w and d.h and d.w > 0 and d.h > 0) then return end
+        if not (d and d.w and d.h and d.w > 0 and d.h > 0) then
+            if snap then snap:free() end
+            return
+        end
         local tx, ty, tw, th = d.x, d.y, d.w, d.h
         local bsz = math.max(1, self.bordersize or 0)
         if not rounded then
@@ -116,13 +132,15 @@ local function apply_cover_border(frame, rounded)
         end
         local max_r = math.floor((math.min(tw, th) - 1) / 2)
         local r = math.min(base_radius, max_r)
-        if r < 2 then
+        if r < 2 or not snap then
             paint_rect_border(bb, tx, ty, tw, th, bsz)
+            if snap then snap:free() end
             return
         end
-        paint_corner_masks(bb, tx, ty, tw, th, r)
+        paint_corner_masks(bb, tx, ty, tw, th, r, snap, x, y)
         paint_rounded_border_edges(bb, tx, ty, tw, th, r, bsz)
         paint_corner_border_arcs(bb, tx, ty, tw, th, r, bsz)
+        snap:free()
     end
 end
 

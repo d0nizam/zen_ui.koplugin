@@ -360,11 +360,15 @@ local function apply_navbar()
 
     local function refreshLibraryStatusBar(fm)
         if not (fm and type(fm._updateStatusBar) == "function") then return end
-        UIManager:nextTick(function()
-            if FileManager.instance == fm then
-                fm:_updateStatusBar()
-            end
-        end)
+        -- Update synchronously so the titlebar's setDirty coalesces with the
+        -- repaint already queued this tick (the file-list rebuild, or the
+        -- full-screen paint from refreshBackgroundTabChange when a library
+        -- background is active). Deferring to its own nextTick fires a separate
+        -- partial "ui" refresh right after, causing a visible flash on color
+        -- devices. Matches the synchronous onPathChanged approach.
+        if FileManager.instance == fm then
+            fm:_updateStatusBar()
+        end
     end
 
     -- === Tab callbacks ===
@@ -1205,6 +1209,14 @@ local function apply_navbar()
         end
 
         table.insert(visual_children, row_with_padding)
+
+        -- Lift navbar off the screen's bottom edge. Some panels (e.g. Kindle
+        -- Colorsoft) have a wider bottom bezel/dead zone that occludes the
+        -- bottommost row (the active-tab underline) when it sits flush.
+        local safe_pad = Screen:scaleBySize(Screen:isColorScreen() and 5 or 0)
+        if safe_pad > 0 then
+            table.insert(visual_children, VerticalSpan:new{ width = safe_pad })
+        end
 
         local visual = VerticalGroup:new(visual_children)
 
