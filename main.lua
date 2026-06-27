@@ -731,6 +731,26 @@ function ZenUI:deletePluginSettings()
         pcall(gs.flush, gs)
     end
 
+    -- Remove userpatches installed alongside the plugin (e.g. the startup-alert
+    -- suppressor seeded into koreader/patches/ at install time). Match any
+    -- priority prefix so the patch is removed regardless of load order.
+    pcall(function()
+        local DataStorage = require("datastorage")
+        local lfs = require("libs/libkoreader-lfs")
+        local patches_dir = DataStorage:getPatchesDir()
+        if lfs.attributes(patches_dir, "mode") ~= "directory" then return end
+        for entry in lfs.dir(patches_dir) do
+            if entry:match("^%d+%-zen.*%-suppress%-startup%-alerts%.lua$")
+                or entry:match("^%d+%-zen[%-_]ui[%-_].*%.lua$") then
+                local fullpath = patches_dir .. "/" .. entry
+                if lfs.attributes(fullpath, "mode") == "file" then
+                    os.remove(fullpath)
+                    logger.info("ZenUI: removed userpatch", entry)
+                end
+            end
+        end
+    end)
+
     logger.info("ZenUI: deletePluginSettings completed")
     return true
 end
